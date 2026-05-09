@@ -1,6 +1,6 @@
 // Service worker for Family CFO PWA
 // Handles offline support and asset caching
-const CACHE_NAME = 'family-cfo-v1';
+const CACHE_NAME = 'family-cfo-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -29,7 +29,9 @@ self.addEventListener('fetch', (event) => {
   // Don't cache Firebase API calls — let them go to network or fail naturally
   if (event.request.url.includes('firestore.googleapis.com') ||
       event.request.url.includes('firebaseio.com') ||
-      event.request.url.includes('googleapis.com/identitytoolkit')) {
+      event.request.url.includes('googleapis.com/identitytoolkit') ||
+      event.request.url.includes('firebasestorage.googleapis.com') ||
+      event.request.url.includes('firebasestorage.app')) {
     return;
   }
 

@@ -360,6 +360,116 @@
       border-bottom: 0.5px solid var(--border);
     }
     .chore-mgmt-row:last-child { border-bottom: none; }
+    .chore-mgmt-row .reorder-btns {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .chore-mgmt-row .reorder-btn {
+      width: 24px; height: 18px; border: 0.5px solid var(--border);
+      background: var(--bg-primary); border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      padding: 0; color: var(--text-secondary);
+    }
+    .chore-mgmt-row .reorder-btn:disabled { opacity: 0.3; }
+    .chore-mgmt-row .edit-chore-btn {
+      border: none; background: transparent; color: var(--info-text);
+      padding: 4px;
+    }
+
+    /* Kid avatar with photo */
+    .kid-avatar.has-photo, .kid-header-avatar.has-photo, .approval-avatar.has-photo {
+      background-size: cover; background-position: center; color: transparent;
+    }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; padding: 1rem;
+    }
+    .modal {
+      background: var(--bg-primary); border-radius: var(--radius-xl);
+      width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto;
+      padding: 1.25rem;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+    .modal h2 { font-size: 16px; font-weight: 500; margin: 0 0 1rem; }
+    .modal-actions {
+      display: flex; gap: 8px; margin-top: 1rem;
+    }
+    .modal-actions .save {
+      flex: 1; background: #0F6E56; color: white; border: none;
+      padding: 12px; border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 500;
+    }
+    .modal-actions .cancel {
+      border: 0.5px solid var(--border); background: var(--bg-primary);
+      padding: 12px 16px; border-radius: var(--radius-md);
+      font-size: 14px;
+    }
+
+    /* Icon picker */
+    .icon-picker {
+      display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px;
+      max-height: 220px; overflow-y: auto;
+      padding: 8px; background: var(--bg-secondary);
+      border-radius: var(--radius-md);
+    }
+    .icon-pick-btn {
+      width: 100%; aspect-ratio: 1; border: 0.5px solid var(--border);
+      background: var(--bg-primary); border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+      padding: 0;
+    }
+    .icon-pick-btn.selected {
+      background: #0F6E56; color: white; border-color: #0F6E56;
+    }
+
+    /* Photo upload */
+    .photo-upload-wrap {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .photo-preview {
+      width: 60px; height: 60px; border-radius: 50%;
+      background: var(--bg-tertiary);
+      background-size: cover; background-position: center;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-secondary); font-size: 22px; font-weight: 500;
+      flex-shrink: 0;
+    }
+    .photo-upload-wrap input[type="file"] { display: none; }
+    .photo-upload-btn {
+      border: 0.5px solid var(--border); background: var(--bg-primary);
+      padding: 8px 14px; border-radius: var(--radius-md); font-size: 13px;
+    }
+    .photo-upload-btn.removing { color: var(--danger-text); }
+
+    /* Mode toggle */
+    .mode-toggle {
+      display: flex; gap: 4px;
+    }
+    .mode-toggle-btn {
+      flex: 1; padding: 8px;
+      border: 0.5px solid var(--border); background: var(--bg-primary);
+      border-radius: var(--radius-md); font-size: 12px; font-weight: 500;
+      color: var(--text-primary);
+    }
+    .mode-toggle-btn.active {
+      background: #0F6E56; color: white; border-color: #0F6E56;
+    }
+
+    /* Flag toggle (schoolReady / hardWork) */
+    .flag-toggle {
+      display: flex; gap: 6px; flex-wrap: wrap;
+    }
+    .flag-toggle button {
+      padding: 6px 12px; border: 0.5px solid var(--border);
+      background: var(--bg-primary); border-radius: var(--radius-md);
+      font-size: 12px;
+    }
+    .flag-toggle button.active {
+      background: var(--bg-tertiary); border-color: var(--text-primary);
+      font-weight: 500;
+    }
   </style>
 </head>
 <body>
@@ -377,6 +487,7 @@
     </div>
   </div>
   <div id="app" style="display: none;"></div>
+  <div id="modal-root"></div>
 
   <!-- Firebase v10 (modular) via CDN -->
   <script type="module">
@@ -389,6 +500,9 @@
       getFirestore, doc, getDoc, setDoc, onSnapshot, enableIndexedDbPersistence,
       collection, addDoc, deleteDoc, updateDoc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import {
+      getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
     // Pull config from sibling file
     import { firebaseConfig, FAMILY_ID } from "./firebase-config.js";
@@ -396,6 +510,7 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+    const storage = getStorage(app);
 
     // Offline persistence
     try {
@@ -469,6 +584,60 @@
       lastResetWeek: null,
     };
 
+    // ---------- Icon palette for chore picker ----------
+    const ICON_PALETTE = [
+      'ti-shoe','ti-box','ti-tooth','ti-shirt','ti-backpack','ti-bed','ti-dish','ti-trash',
+      'ti-walk','ti-book','ti-plant','ti-paw','ti-soup','ti-apple','ti-cookie','ti-bread',
+      'ti-bath','ti-soap','ti-broom','ti-vacuum-cleaner','ti-hanger','ti-laundry','ti-tools','ti-hammer',
+      'ti-bike','ti-ball-football','ti-music','ti-pencil','ti-school','ti-letter-a','ti-calculator','ti-palette',
+      'ti-puzzle','ti-cards','ti-game-pad','ti-tv','ti-headphones','ti-camera','ti-star','ti-heart',
+      'ti-flame','ti-sun','ti-moon','ti-cloud','ti-tree','ti-flower','ti-fish','ti-bone',
+      'ti-medal','ti-trophy','ti-circle-check','ti-list-check'
+    ];
+
+    // ---------- Photo helpers (resize before upload) ----------
+    async function resizeImage(file, max = 256) {
+      const dataUrl = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+      const img = await new Promise((res, rej) => {
+        const i = new Image();
+        i.onload = () => res(i);
+        i.onerror = rej;
+        i.src = dataUrl;
+      });
+      // Square crop centered
+      const side = Math.min(img.width, img.height);
+      const sx = (img.width - side) / 2;
+      const sy = (img.height - side) / 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = max; canvas.height = max;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, max, max);
+      return new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+    }
+
+    async function uploadKidPhoto(kidId, file) {
+      const blob = await resizeImage(file, 256);
+      const path = `families/${FAMILY_ID}/kids/${kidId}.jpg`;
+      const r = storageRef(storage, path);
+      await uploadBytes(r, blob, { contentType: 'image/jpeg' });
+      return await getDownloadURL(r);
+    }
+
+    async function deleteKidPhoto(kidId) {
+      try {
+        const path = `families/${FAMILY_ID}/kids/${kidId}.jpg`;
+        await deleteObject(storageRef(storage, path));
+      } catch (e) {
+        // OK if file doesn't exist
+        console.warn('Photo delete:', e.code);
+      }
+    }
+
     // ---------- App state ----------
     let state = null;
     let view = 'picker';
@@ -482,6 +651,7 @@
     let soundOn = true;
     let chosenVoice = null;
     let allVoices = [];
+    let ttsWarmedUp = false;
 
     function ensureAudio() {
       if (!audioCtx) {
@@ -489,6 +659,15 @@
         catch (e) { return null; }
       }
       if (audioCtx.state === 'suspended') audioCtx.resume();
+      // First-touch TTS warmup: fire a silent utterance to wake the engine
+      if (!ttsWarmedUp && 'speechSynthesis' in window) {
+        ttsWarmedUp = true;
+        try {
+          const u = new SpeechSynthesisUtterance(' ');
+          u.volume = 0; u.rate = 1; u.pitch = 1;
+          window.speechSynthesis.speak(u);
+        } catch (e) {}
+      }
       return audioCtx;
     }
 
@@ -738,13 +917,18 @@
         <div class="picker">
           <p class="picker-title">Who's tapping today?</p>
           <div class="picker-grid">
-            ${Object.entries(state.kids).map(([id, k]) => `
+            ${Object.entries(state.kids).map(([id, k]) => {
+              const hasPhoto = !!k.photoURL;
+              const avatarStyle = hasPhoto
+                ? `background-image:url('${k.photoURL}')`
+                : `background:${k.textColor}`;
+              return `
               <button class="kid-tile" data-kid="${id}" data-greeting="Hi ${k.name}!" style="background:${k.bgColor}">
-                <div class="kid-avatar" style="background:${k.textColor}">${k.avatar}</div>
+                <div class="kid-avatar ${hasPhoto ? 'has-photo' : ''}" style="${avatarStyle}">${hasPhoto ? '' : k.avatar}</div>
                 <p style="font-size:22px;font-weight:500;margin:0;color:${k.textColor}">${k.name}</p>
                 <p style="font-size:13px;margin:0;color:${k.textColor};opacity:0.75">Age ${k.age}</p>
               </button>
-            `).join('')}
+            `;}).join('')}
           </div>
         </div>
       `;
@@ -754,10 +938,14 @@
       const k = state.kids[kidId];
       const isPre = k.mode === 'pre-reader';
       const total = (k.spend || 0) + (k.save || 0) + (k.give || 0);
+      const hasPhoto = !!k.photoURL;
+      const headerAvatarStyle = hasPhoto
+        ? `background-image:url('${k.photoURL}')`
+        : `background:${k.textColor}`;
       return `
         <div class="kid-header" style="background:${k.bgColor}">
           <div class="kid-header-left">
-            <div class="kid-header-avatar" style="background:${k.textColor}">${k.avatar}</div>
+            <div class="kid-header-avatar ${hasPhoto ? 'has-photo' : ''}" style="${headerAvatarStyle}">${hasPhoto ? '' : k.avatar}</div>
             <div>
               <p style="font-size:18px;font-weight:500;margin:0;color:${k.textColor}">Hi ${k.name}!</p>
               <p style="font-size:13px;margin:2px 0 0;color:${k.textColor};opacity:0.75">${DAY_NAMES[tIdx]} · Total earned ${fmt(total)}</p>
@@ -928,9 +1116,11 @@
             ? `<p style="font-size:13px;color:var(--text-secondary);margin:0;padding:1rem 0;text-align:center">All caught up.</p>`
             : state.pendingApprovals.map((p, i) => {
               const k = state.kids[p.kid];
+              const hasPhoto = !!k.photoURL;
+              const apvStyle = hasPhoto ? `background-image:url('${k.photoURL}')` : `background:${k.textColor}`;
               return `
                 <div class="approval-row">
-                  <div class="approval-avatar" style="background:${k.textColor}">${k.avatar}</div>
+                  <div class="approval-avatar ${hasPhoto ? 'has-photo' : ''}" style="${apvStyle}">${hasPhoto ? '' : k.avatar}</div>
                   <div style="flex:1;min-width:0">
                     <p style="font-size:14px;margin:0;font-weight:500">${p.chore}${p.hardWork ? ' 💪' : ''}</p>
                     <p style="font-size:12px;margin:2px 0 0;color:var(--text-secondary)">${k.name} · ${fmt(p.amount)} · ${p.time}</p>
@@ -961,48 +1151,299 @@
             <p style="font-size:14px;font-weight:500;margin:0"><i class="ti ti-list-check" style="font-size:16px;vertical-align:-2px"></i> Chore management</p>
             <button id="add-chore-btn" style="border:0.5px solid var(--border);background:var(--bg-primary);padding:6px 12px;border-radius:var(--radius-md);font-size:12px"><i class="ti ti-plus" style="font-size:13px;vertical-align:-1px"></i> Add chore</button>
           </div>
-          <div id="add-chore-form" style="display:none;background:var(--bg-secondary);padding:1rem;border-radius:var(--radius-md);margin-bottom:12px">
+
+          ${Object.entries(state.kids).map(([kid, k]) => {
+            const hasPhoto = !!k.photoURL;
+            const mgmtAvatarStyle = hasPhoto
+              ? `background-image:url('${k.photoURL}');background-size:cover;background-position:center`
+              : `background:${k.textColor};color:white`;
+            const chores = k.chores || [];
+            return `
+            <div style="margin-top:12px;padding:10px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                <div style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:14px;${mgmtAvatarStyle}">${hasPhoto ? '' : k.avatar}</div>
+                <div style="flex:1">
+                  <p style="font-size:13px;font-weight:500;margin:0">${k.name}</p>
+                  <p style="font-size:11px;margin:2px 0 0;color:var(--text-secondary)">Age ${k.age} · ${k.mode}</p>
+                </div>
+                <button class="edit-kid-btn" data-kid="${kid}" style="border:0.5px solid var(--border);background:var(--bg-primary);padding:6px 10px;border-radius:var(--radius-md);font-size:12px"><i class="ti ti-edit" style="font-size:12px;vertical-align:-1px"></i> Edit ${k.name}</button>
+              </div>
+              ${chores.map((c, idx) => `
+                <div class="chore-mgmt-row">
+                  <div class="reorder-btns">
+                    <button class="reorder-btn move-chore-up" data-kid="${kid}" data-chore-id="${c.id}" ${idx === 0 ? 'disabled' : ''} aria-label="Move up"><i class="ti ti-chevron-up" style="font-size:12px"></i></button>
+                    <button class="reorder-btn move-chore-down" data-kid="${kid}" data-chore-id="${c.id}" ${idx === chores.length - 1 ? 'disabled' : ''} aria-label="Move down"><i class="ti ti-chevron-down" style="font-size:12px"></i></button>
+                  </div>
+                  <i class="ti ${c.icon}" style="font-size:18px;color:${k.textColor}"></i>
+                  <div style="flex:1;min-width:0">
+                    <p style="font-size:13px;margin:0;font-weight:500">${c.title}${c.hardWork ? ' 💪' : ''}${c.schoolReady ? ' 🎒' : ''}</p>
+                    <p style="font-size:11px;margin:2px 0 0;color:var(--text-secondary)">${fmt(c.amount)} · ${c.schedule.filter(Boolean).length} days/wk</p>
+                  </div>
+                  <button class="edit-chore-btn" data-kid="${kid}" data-chore-id="${c.id}" aria-label="Edit"><i class="ti ti-edit" style="font-size:16px"></i></button>
+                  <button class="delete-chore-btn" data-kid="${kid}" data-chore-id="${c.id}" style="border:none;background:transparent;color:var(--danger-text);padding:4px"><i class="ti ti-trash" style="font-size:16px"></i></button>
+                </div>
+              `).join('')}
+              ${chores.length === 0 ? `<p style="font-size:12px;color:var(--text-secondary);padding:8px 0;margin:0">No chores yet — tap "Add chore" above.</p>` : ''}
+            </div>
+          `;}).join('')}
+        </div>
+      `;
+    }
+
+    // ---------- Modals ----------
+    function closeModal() {
+      $('modal-root').innerHTML = '';
+    }
+
+    function openChoreModal(mode, kidId, choreId) {
+      // mode: 'add' | 'edit'
+      const isEdit = mode === 'edit';
+      let chore;
+      if (isEdit) {
+        chore = state.kids[kidId].chores.find(c => c.id === choreId);
+        if (!chore) return;
+      } else {
+        chore = { title: '', amount: 0.5, icon: 'ti-circle-check',
+          schedule: [true,true,true,true,true,true,true],
+          schoolReady: false, hardWork: false };
+      }
+      const kidsOpts = Object.entries(state.kids).map(([id, k]) =>
+        `<option value="${id}" ${id === kidId ? 'selected' : ''}>${k.name}</option>`).join('');
+      const dayBtns = DAYS.map((d, i) =>
+        `<button type="button" class="day-toggle modal-day ${chore.schedule[i] ? 'active' : ''}" data-day="${i}">${d}</button>`).join('');
+      const iconBtns = ICON_PALETTE.map(ic =>
+        `<button type="button" class="icon-pick-btn modal-icon ${ic === chore.icon ? 'selected' : ''}" data-icon="${ic}"><i class="ti ${ic}" style="font-size:18px"></i></button>`).join('');
+
+      $('modal-root').innerHTML = `
+        <div class="modal-backdrop" id="chore-modal-backdrop">
+          <div class="modal" id="chore-modal">
+            <h2>${isEdit ? 'Edit chore' : 'Add chore'}</h2>
             <div class="form-row">
               <label>For which kid?</label>
-              <select id="new-chore-kid">
-                ${Object.entries(state.kids).map(([id, k]) => `<option value="${id}">${k.name}</option>`).join('')}
-              </select>
+              <select id="m-chore-kid" ${isEdit ? 'disabled' : ''}>${kidsOpts}</select>
             </div>
             <div class="form-row">
               <label>Chore name</label>
-              <input type="text" id="new-chore-title" placeholder="e.g. Feed the dog" maxlength="40">
+              <input type="text" id="m-chore-title" maxlength="40" value="${chore.title.replace(/"/g, '&quot;')}" placeholder="e.g. Feed the dog">
             </div>
             <div class="form-row">
               <label>Amount ($)</label>
-              <input type="number" id="new-chore-amount" min="0" max="20" step="0.5" value="0.5">
+              <input type="number" id="m-chore-amount" min="0" max="20" step="0.5" value="${chore.amount}">
             </div>
             <div class="form-row">
               <label>Days assigned</label>
-              <div class="day-toggles" id="new-chore-days">
-                ${DAYS.map((d, i) => `<button type="button" class="day-toggle active" data-day="${i}">${d}</button>`).join('')}
+              <div class="day-toggles">${dayBtns}</div>
+            </div>
+            <div class="form-row">
+              <label>Tags</label>
+              <div class="flag-toggle">
+                <button type="button" id="m-flag-school" class="${chore.schoolReady ? 'active' : ''}">🎒 School ready</button>
+                <button type="button" id="m-flag-hard" class="${chore.hardWork ? 'active' : ''}">💪 Hard work</button>
               </div>
             </div>
-            <div style="display:flex;gap:8px;margin-top:8px">
-              <button id="save-chore-btn" style="flex:1;background:#0F6E56;color:white;border:none;padding:10px;border-radius:var(--radius-md);font-size:14px;font-weight:500">Save</button>
-              <button id="cancel-chore-btn" style="border:0.5px solid var(--border);background:var(--bg-primary);padding:10px 16px;border-radius:var(--radius-md);font-size:14px">Cancel</button>
+            <div class="form-row">
+              <label>Icon</label>
+              <div class="icon-picker">${iconBtns}</div>
+            </div>
+            <div class="modal-actions">
+              <button class="cancel" id="m-chore-cancel">Cancel</button>
+              <button class="save" id="m-chore-save">${isEdit ? 'Save changes' : 'Add chore'}</button>
             </div>
           </div>
-
-          ${Object.entries(state.kids).map(([kid, k]) => `
-            <p style="font-size:12px;color:var(--text-secondary);margin:12px 0 6px;font-weight:500">${k.name}'s chores</p>
-            ${(k.chores || []).map(c => `
-              <div class="chore-mgmt-row">
-                <i class="ti ${c.icon}" style="font-size:18px;color:${k.textColor}"></i>
-                <div style="flex:1;min-width:0">
-                  <p style="font-size:13px;margin:0;font-weight:500">${c.title}${c.hardWork ? ' 💪' : ''}${c.schoolReady ? ' 🎒' : ''}</p>
-                  <p style="font-size:11px;margin:2px 0 0;color:var(--text-secondary)">${fmt(c.amount)} · ${c.schedule.filter(Boolean).length} days/wk</p>
-                </div>
-                <button class="delete-chore-btn" data-kid="${kid}" data-chore-id="${c.id}" style="border:none;background:transparent;color:var(--danger-text);padding:4px"><i class="ti ti-trash" style="font-size:16px"></i></button>
-              </div>
-            `).join('')}
-          `).join('')}
         </div>
       `;
+
+      // Wire handlers
+      $('chore-modal-backdrop').onclick = (e) => {
+        if (e.target.id === 'chore-modal-backdrop') closeModal();
+      };
+      $('m-chore-cancel').onclick = closeModal;
+
+      let pickedIcon = chore.icon;
+      document.querySelectorAll('.modal-icon').forEach(b => {
+        b.onclick = () => {
+          document.querySelectorAll('.modal-icon').forEach(x => x.classList.remove('selected'));
+          b.classList.add('selected');
+          pickedIcon = b.dataset.icon;
+        };
+      });
+      document.querySelectorAll('.modal-day').forEach(b => {
+        b.onclick = () => b.classList.toggle('active');
+      });
+      let flagSchool = chore.schoolReady, flagHard = chore.hardWork;
+      $('m-flag-school').onclick = () => { flagSchool = !flagSchool; $('m-flag-school').classList.toggle('active', flagSchool); };
+      $('m-flag-hard').onclick   = () => { flagHard   = !flagHard;   $('m-flag-hard').classList.toggle('active', flagHard); };
+
+      $('m-chore-save').onclick = () => {
+        const title = $('m-chore-title').value.trim();
+        const amount = parseFloat($('m-chore-amount').value) || 0;
+        if (!title) return alert('Please enter a chore name');
+        const days = Array.from(document.querySelectorAll('.modal-day')).map(b => b.classList.contains('active'));
+        const targetKidId = isEdit ? kidId : $('m-chore-kid').value;
+        const tIdx = todayIdx();
+
+        if (isEdit) {
+          // Mutate in place; preserve history & streak
+          const c = state.kids[targetKidId].chores.find(x => x.id === choreId);
+          if (!c) return;
+          c.title = title;
+          c.amount = amount;
+          c.icon = pickedIcon;
+          c.schoolReady = flagSchool;
+          c.hardWork = flagHard;
+          // If schedule changed, preserve done/pending statuses but update na cells
+          c.schedule = days;
+          c.history = c.history.map((h, i) => {
+            if (!days[i]) return 'na';
+            // If was na before, set to available; otherwise keep status (done/pending/missed/available)
+            return h === 'na' ? 'available' : h;
+          });
+        } else {
+          const newChore = {
+            id: 'c' + Date.now(),
+            title, icon: pickedIcon, amount,
+            schoolReady: flagSchool, hardWork: flagHard,
+            schedule: days,
+            history: days.map(d => d ? 'available' : 'na'),
+            streak: 0
+          };
+          if (!state.kids[targetKidId].chores) state.kids[targetKidId].chores = [];
+          state.kids[targetKidId].chores.push(newChore);
+        }
+        scheduleSave();
+        closeModal();
+        render();
+      };
+    }
+
+    function openKidModal(kidId) {
+      const k = state.kids[kidId];
+      const hasPhoto = !!k.photoURL;
+      const previewStyle = hasPhoto
+        ? `background-image:url('${k.photoURL}')`
+        : `background:${k.bgColor};color:${k.textColor}`;
+      const modes = [
+        { id: 'pre-reader', label: 'Pre-reader' },
+        { id: 'learning', label: 'Learning' },
+        { id: 'independent', label: 'Independent' },
+      ];
+      $('modal-root').innerHTML = `
+        <div class="modal-backdrop" id="kid-modal-backdrop">
+          <div class="modal" id="kid-modal">
+            <h2>Edit ${k.name}</h2>
+            <div class="form-row">
+              <label>Name</label>
+              <input type="text" id="m-kid-name" maxlength="20" value="${k.name.replace(/"/g, '&quot;')}">
+            </div>
+            <div class="form-row">
+              <label>Age</label>
+              <input type="number" id="m-kid-age" min="2" max="18" value="${k.age}">
+            </div>
+            <div class="form-row">
+              <label>Mode</label>
+              <div class="mode-toggle">
+                ${modes.map(m => `<button type="button" class="mode-toggle-btn ${k.mode === m.id ? 'active' : ''}" data-mode="${m.id}">${m.label}</button>`).join('')}
+              </div>
+              <p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0">Pre-reader shows big icons + voice button. Independent is the standard view.</p>
+            </div>
+            <div class="form-row">
+              <label>Photo</label>
+              <div class="photo-upload-wrap">
+                <div class="photo-preview" id="m-photo-preview" style="${previewStyle}">${hasPhoto ? '' : k.avatar}</div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <label class="photo-upload-btn">
+                    ${hasPhoto ? 'Change photo' : 'Upload photo'}
+                    <input type="file" id="m-photo-input" accept="image/*">
+                  </label>
+                  ${hasPhoto ? `<button type="button" class="photo-upload-btn removing" id="m-photo-remove">Remove</button>` : ''}
+                </div>
+              </div>
+              <p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0">Photo is auto-cropped square and resized to 256×256.</p>
+            </div>
+            <div class="modal-actions">
+              <button class="cancel" id="m-kid-cancel">Cancel</button>
+              <button class="save" id="m-kid-save">Save changes</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      let pickedMode = k.mode;
+      let pendingPhotoFile = null;
+      let pendingPhotoRemove = false;
+
+      $('kid-modal-backdrop').onclick = (e) => {
+        if (e.target.id === 'kid-modal-backdrop') closeModal();
+      };
+      $('m-kid-cancel').onclick = closeModal;
+
+      document.querySelectorAll('.mode-toggle-btn').forEach(b => {
+        b.onclick = () => {
+          document.querySelectorAll('.mode-toggle-btn').forEach(x => x.classList.remove('active'));
+          b.classList.add('active');
+          pickedMode = b.dataset.mode;
+        };
+      });
+
+      $('m-photo-input').onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        pendingPhotoFile = file;
+        pendingPhotoRemove = false;
+        // Preview
+        const reader = new FileReader();
+        reader.onload = () => {
+          $('m-photo-preview').style.backgroundImage = `url('${reader.result}')`;
+          $('m-photo-preview').textContent = '';
+          $('m-photo-preview').style.background = `url('${reader.result}') center / cover`;
+        };
+        reader.readAsDataURL(file);
+      };
+
+      const removeBtn = $('m-photo-remove');
+      if (removeBtn) {
+        removeBtn.onclick = () => {
+          pendingPhotoRemove = true;
+          pendingPhotoFile = null;
+          $('m-photo-preview').style.backgroundImage = 'none';
+          $('m-photo-preview').style.background = k.bgColor;
+          $('m-photo-preview').style.color = k.textColor;
+          $('m-photo-preview').textContent = k.avatar;
+          removeBtn.disabled = true;
+          removeBtn.textContent = 'Will remove on save';
+        };
+      }
+
+      $('m-kid-save').onclick = async () => {
+        const name = $('m-kid-name').value.trim() || k.name;
+        const age = parseInt($('m-kid-age').value) || k.age;
+        const saveBtn = $('m-kid-save');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving…';
+        try {
+          state.kids[kidId].name = name;
+          state.kids[kidId].age = age;
+          state.kids[kidId].mode = pickedMode;
+          state.kids[kidId].avatar = name.charAt(0).toUpperCase();
+
+          if (pendingPhotoFile) {
+            saveBtn.textContent = 'Uploading photo…';
+            const url = await uploadKidPhoto(kidId, pendingPhotoFile);
+            state.kids[kidId].photoURL = url;
+          } else if (pendingPhotoRemove) {
+            await deleteKidPhoto(kidId);
+            delete state.kids[kidId].photoURL;
+          }
+          scheduleSave();
+          closeModal();
+          render();
+        } catch (e) {
+          console.error('Save failed:', e);
+          alert('Save failed: ' + (e.message || e.code || 'unknown error'));
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save changes';
+        }
+      };
     }
 
     function generateManagerNote(tIdx) {
@@ -1068,7 +1509,8 @@
       document.querySelectorAll('.kid-tile').forEach(b => {
         b.onclick = () => {
           ensureAudio();
-          speak(b.dataset.greeting);
+          // Small delay lets TTS engine finish warmup before real utterance
+          setTimeout(() => speak(b.dataset.greeting), 150);
           activeKid = b.dataset.kid;
           view = 'kid';
           render();
@@ -1172,36 +1614,45 @@
       // Chore management
       const addBtn = $('add-chore-btn');
       if (addBtn) addBtn.onclick = () => {
-        const f = $('add-chore-form');
-        f.style.display = f.style.display === 'none' ? 'block' : 'none';
+        // Default to first kid for "add" mode
+        const firstKid = Object.keys(state.kids)[0];
+        openChoreModal('add', firstKid);
       };
-      const cancelBtn = $('cancel-chore-btn');
-      if (cancelBtn) cancelBtn.onclick = () => { $('add-chore-form').style.display = 'none'; };
 
-      document.querySelectorAll('.day-toggle').forEach(b => {
-        b.onclick = () => b.classList.toggle('active');
+      document.querySelectorAll('.edit-chore-btn').forEach(b => {
+        b.onclick = () => openChoreModal('edit', b.dataset.kid, b.dataset.choreId);
       });
 
-      const saveBtn = $('save-chore-btn');
-      if (saveBtn) saveBtn.onclick = () => {
-        const kidId = $('new-chore-kid').value;
-        const title = $('new-chore-title').value.trim();
-        const amount = parseFloat($('new-chore-amount').value) || 0;
-        if (!title) return alert('Please enter a chore name');
-        const days = Array.from(document.querySelectorAll('.day-toggle')).map(b => b.classList.contains('active'));
-        const tIdx = todayIdx();
-        const newChore = {
-          id: 'c' + Date.now(),
-          title, icon: 'ti-circle-check', amount,
-          schedule: days,
-          history: days.map((d, i) => i > tIdx ? (d ? 'available' : 'na') : (d ? 'available' : 'na')),
-          streak: 0
+      document.querySelectorAll('.edit-kid-btn').forEach(b => {
+        b.onclick = () => openKidModal(b.dataset.kid);
+      });
+
+      document.querySelectorAll('.move-chore-up').forEach(b => {
+        b.onclick = () => {
+          const kid = b.dataset.kid;
+          const cid = b.dataset.choreId;
+          const arr = state.kids[kid].chores;
+          const idx = arr.findIndex(c => c.id === cid);
+          if (idx > 0) {
+            [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
+            scheduleSave();
+            render();
+          }
         };
-        if (!state.kids[kidId].chores) state.kids[kidId].chores = [];
-        state.kids[kidId].chores.push(newChore);
-        scheduleSave();
-        render();
-      };
+      });
+      document.querySelectorAll('.move-chore-down').forEach(b => {
+        b.onclick = () => {
+          const kid = b.dataset.kid;
+          const cid = b.dataset.choreId;
+          const arr = state.kids[kid].chores;
+          const idx = arr.findIndex(c => c.id === cid);
+          if (idx >= 0 && idx < arr.length - 1) {
+            [arr[idx+1], arr[idx]] = [arr[idx], arr[idx+1]];
+            scheduleSave();
+            render();
+          }
+        };
+      });
 
       document.querySelectorAll('.delete-chore-btn').forEach(b => {
         b.onclick = () => {
@@ -1232,6 +1683,7 @@
     });
 
     $('signin-btn').onclick = async () => {
+      ensureAudio(); // Triggers TTS warmup early
       const email = $('email').value.trim();
       const password = $('password').value;
       const errEl = $('login-error');
