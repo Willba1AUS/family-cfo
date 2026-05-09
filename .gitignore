@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Local-only secret overrides (if you ever split config out further)
+firebase-config.local.js

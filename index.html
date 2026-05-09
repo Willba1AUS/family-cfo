@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0F6E56">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="app-icon-192.png">
+  <link rel="apple-touch-icon" href="app-icon-192.png">
+  <title>Family CFO</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+  <style>
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f5f5f0;
+      --bg-tertiary: #ebebe5;
+      --text-primary: #1a1a1a;
+      --text-secondary: #6f6e6a;
+      --text-tertiary: #9a9a95;
+      --border: rgba(0,0,0,0.12);
+      --border-strong: rgba(0,0,0,0.25);
+      --info-bg: #E6F1FB;
+      --info-text: #185FA5;
+      --success-bg: #E1F5EE;
+      --success-text: #0F6E56;
+      --warning-bg: #FAEEDA;
+      --warning-text: #BA7517;
+      --danger-bg: #FCEBEB;
+      --danger-text: #A32D2D;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      font-size: 16px;
+      line-height: 1.5;
+      overscroll-behavior: none;
+    }
+    body { min-height: 100vh; min-height: 100dvh; }
+    #app {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 1rem;
+      min-height: 100vh;
+    }
+    button { font-family: inherit; cursor: pointer; }
+    input, select { font-family: inherit; }
+
+    /* Login screen */
+    #login-screen {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 100vh; padding: 2rem;
+      background: var(--bg-primary);
+    }
+    .login-card {
+      background: var(--bg-primary);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 2rem;
+      max-width: 360px; width: 100%;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .login-card h1 { font-size: 22px; font-weight: 500; margin: 0 0 8px; }
+    .login-card p { color: var(--text-secondary); margin: 0 0 1.5rem; font-size: 14px; }
+    .login-input {
+      width: 100%; padding: 12px; border: 0.5px solid var(--border);
+      border-radius: var(--radius-md); font-size: 15px; margin-bottom: 10px;
+      background: var(--bg-primary);
+    }
+    .login-btn {
+      width: 100%; padding: 12px; border: none;
+      background: #0F6E56; color: white;
+      border-radius: var(--radius-md); font-size: 15px; font-weight: 500;
+      margin-top: 6px;
+    }
+    .login-btn:disabled { opacity: 0.5; }
+    .login-error { color: var(--danger-text); font-size: 13px; margin-top: 8px; }
+    .login-hint { font-size: 12px; color: var(--text-tertiary); margin-top: 1rem; line-height: 1.6; }
+
+    /* Top nav */
+    .top-nav {
+      display: flex; gap: 8px; align-items: center;
+      padding: 4px; background: var(--bg-secondary);
+      border-radius: var(--radius-lg); width: fit-content;
+      margin-bottom: 1rem;
+    }
+    .nav-btn {
+      border: none; padding: 8px 14px; border-radius: var(--radius-md);
+      font-size: 13px; font-weight: 500;
+      background: transparent; color: var(--text-secondary);
+    }
+    .nav-btn.active { background: var(--bg-primary); color: var(--text-primary); }
+    .top-nav-right {
+      margin-left: auto; display: flex; gap: 8px; align-items: center;
+    }
+    .icon-btn {
+      border: 0.5px solid var(--border); background: var(--bg-primary);
+      width: 34px; height: 34px; border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* Kid picker */
+    .picker {
+      background: var(--bg-secondary);
+      border-radius: var(--radius-xl); padding: 2.5rem 2rem;
+      min-height: 360px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    .picker-title { font-size: 18px; font-weight: 500; margin: 0 0 1.75rem; }
+    .picker-grid { display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; }
+    .kid-tile {
+      border: none; border-radius: var(--radius-xl);
+      padding: 1.5rem 2rem;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      min-width: 180px;
+      transition: transform 0.15s;
+    }
+    .kid-tile:active { transform: scale(0.97); }
+    .kid-avatar {
+      width: 84px; height: 84px; border-radius: 50%;
+      color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 38px; font-weight: 500;
+    }
+
+    /* Kid view */
+    .kid-header {
+      border-radius: var(--radius-xl); padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .kid-header-left { display: flex; align-items: center; gap: 12px; }
+    .kid-header-avatar {
+      width: 48px; height: 48px; border-radius: 50%;
+      color: white; display: flex; align-items: center; justify-content: center;
+      font-size: 22px; font-weight: 500;
+    }
+    .back-btn {
+      border: 0.5px solid currentColor; background: transparent;
+      padding: 6px 12px; border-radius: var(--radius-md); font-size: 13px;
+    }
+
+    /* Jars */
+    .jars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .jar {
+      border-radius: var(--radius-xl); padding: 0.875rem; text-align: center;
+    }
+    .jar-glass {
+      position: relative;
+      margin: 0 auto 8px;
+      border-style: solid; border-top: none;
+      border-radius: 0 0 10px 10px;
+      overflow: hidden; background: white;
+    }
+    .jar-fill {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      opacity: 0.7; transition: height 0.6s ease;
+    }
+    .jar-icon {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 2;
+    }
+
+    /* Chore grid */
+    .chore-grid {
+      background: var(--bg-primary);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-xl);
+      overflow: hidden; margin-top: 12px;
+    }
+    .grid-header {
+      display: grid; grid-template-columns: 1fr repeat(7, 36px); gap: 0;
+      padding: 10px 12px 6px;
+      border-bottom: 0.5px solid var(--border);
+      background: var(--bg-secondary);
+    }
+    .grid-header-day {
+      text-align: center; font-size: 11px; font-weight: 500;
+      color: var(--text-secondary); text-transform: uppercase;
+    }
+    .grid-header-day.today { color: var(--info-text); }
+    .grid-header-day.today::after {
+      content: ''; display: block; width: 4px; height: 4px;
+      background: var(--info-text); border-radius: 50%;
+      margin: 2px auto 0;
+    }
+    .chore-row {
+      display: grid; grid-template-columns: 1fr repeat(7, 36px); gap: 0;
+      padding: 12px; align-items: center;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .chore-row:last-child { border-bottom: none; }
+    .chore-info { display: flex; align-items: center; gap: 10px; min-width: 0; padding-right: 8px; }
+    .chore-icon-circle {
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .chore-title {
+      font-weight: 500; margin: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .chore-meta { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+    .audio-btn {
+      border: none;
+      width: 26px; height: 26px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: transform 0.15s ease;
+    }
+    .audio-btn:active { transform: scale(0.9); }
+    .audio-btn.speaking { background: var(--info-bg) !important; }
+
+    /* Day cells */
+    .day-cell {
+      width: 28px; height: 28px; margin: 0 auto;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s ease;
+    }
+    .day-cell.today { box-shadow: 0 0 0 2px var(--info-text); }
+    .day-cell.tickable { cursor: pointer; }
+    .day-cell.tickable:active { transform: scale(0.92); }
+
+    /* Cards */
+    .card {
+      background: var(--bg-primary);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    @media (min-width: 600px) { .stat-grid { grid-template-columns: repeat(4, 1fr); } }
+    .stat-card { border-radius: var(--radius-md); padding: 0.875rem; }
+    .stat-label {
+      font-size: 11px; margin: 0;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .stat-value { font-size: 22px; font-weight: 500; margin: 4px 0 0; }
+
+    /* Burst animation */
+    @keyframes burst {
+      0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+    }
+    .burst { animation: burst 0.6s ease forwards; pointer-events: none; }
+
+    /* Approval rows */
+    .approval-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 0;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .approval-row:last-child { border-bottom: none; }
+    .approval-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 500; flex-shrink: 0;
+    }
+    .approve-btn {
+      border: none; background: var(--success-bg); color: var(--success-text);
+      padding: 6px 12px; border-radius: var(--radius-md);
+      font-size: 12px; font-weight: 500;
+    }
+    .reject-btn {
+      border: 0.5px solid var(--border); background: transparent;
+      color: var(--text-secondary);
+      padding: 6px 12px; border-radius: var(--radius-md); font-size: 12px;
+    }
+
+    /* Manager note */
+    .manager-note {
+      background: var(--info-bg);
+      border-radius: var(--radius-xl);
+      padding: 1rem 1.25rem;
+      display: flex; gap: 12px; align-items: flex-start;
+      color: var(--info-text);
+    }
+
+    /* Voice picker */
+    .voice-row {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 1rem; flex-wrap: wrap;
+      font-size: 12px; color: var(--text-secondary);
+    }
+    .voice-row select {
+      font-size: 12px; padding: 5px 8px;
+      border-radius: var(--radius-md); border: 0.5px solid var(--border);
+      background: var(--bg-primary); max-width: 280px;
+    }
+    .voice-row button {
+      border: 0.5px solid var(--border); background: var(--bg-primary);
+      padding: 5px 10px; border-radius: var(--radius-md);
+      font-size: 11px;
+    }
+
+    /* Loading */
+    #loading {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg-primary); z-index: 9999;
+    }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: #0F6E56;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Connection status */
+    .conn-status {
+      position: fixed; top: 8px; right: 8px;
+      padding: 4px 10px; border-radius: var(--radius-md);
+      font-size: 11px; z-index: 100;
+      display: none;
+    }
+    .conn-status.offline {
+      display: block;
+      background: var(--warning-bg); color: var(--warning-text);
+    }
+
+    /* Add chore form */
+    .form-row {
+      display: flex; flex-direction: column; gap: 6px;
+      margin-bottom: 12px;
+    }
+    .form-row label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+    .form-row input, .form-row select {
+      padding: 10px; border: 0.5px solid var(--border);
+      border-radius: var(--radius-md); font-size: 14px;
+      background: var(--bg-primary);
+    }
+    .day-toggles { display: flex; gap: 4px; flex-wrap: wrap; }
+    .day-toggle {
+      width: 36px; height: 36px; border: 0.5px solid var(--border);
+      background: var(--bg-primary); border-radius: var(--radius-md);
+      font-size: 12px; font-weight: 500;
+    }
+    .day-toggle.active { background: #0F6E56; color: white; border-color: #0F6E56; }
+
+    /* Chore management */
+    .chore-mgmt-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 0;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .chore-mgmt-row:last-child { border-bottom: none; }
+  </style>
+</head>
+<body>
+  <div id="loading"><div class="spinner"></div></div>
+  <div class="conn-status" id="conn-status">Offline · changes saved locally</div>
+  <div id="login-screen" style="display: none;">
+    <div class="login-card">
+      <h1>Family CFO</h1>
+      <p>Sign in to continue</p>
+      <input class="login-input" type="email" id="email" placeholder="Email" autocomplete="email">
+      <input class="login-input" type="password" id="password" placeholder="Password" autocomplete="current-password">
+      <button class="login-btn" id="signin-btn">Sign in</button>
+      <div class="login-error" id="login-error"></div>
+      <div class="login-hint">First time? Create accounts in Firebase Console → Authentication → Users.</div>
+    </div>
+  </div>
+  <div id="app" style="display: none;"></div>
+
+  <!-- Firebase v10 (modular) via CDN -->
+  <script type="module">
+    // Imports
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import {
+      getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import {
+      getFirestore, doc, getDoc, setDoc, onSnapshot, enableIndexedDbPersistence,
+      collection, addDoc, deleteDoc, updateDoc, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    // Pull config from sibling file
+    import { firebaseConfig, FAMILY_ID } from "./firebase-config.js";
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // Offline persistence
+    try {
+      await enableIndexedDbPersistence(db);
+    } catch (e) {
+      console.warn("Persistence not enabled:", e.code);
+    }
+
+    // ---------- Constants ----------
+    const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+    function todayIdx() {
+      // JS: Sun=0, Mon=1...Sat=6 — we want Mon=0...Sun=6
+      const d = new Date().getDay();
+      return d === 0 ? 6 : d - 1;
+    }
+    function fmt(n) { return '$' + (Number(n) || 0).toFixed(2); }
+
+    // ---------- Default state for first-run ----------
+    const DEFAULT_STATE = {
+      kids: {
+        rafa: {
+          name: 'Rafa', age: 4, avatar: 'R', mode: 'pre-reader',
+          textColor: '#993C1D', bgColor: '#FAECE7', accentColor: '#D85A30',
+          spend: 0, save: 0, give: 0,
+          chores: [
+            { id: 'r1', title: 'Put shoes away', icon: 'ti-shoe', amount: 0.5,
+              schedule: [true,true,true,true,true,true,true],
+              history: ['available','available','available','available','available','available','available'], streak: 0 },
+            { id: 'r2', title: 'Pack toys away', icon: 'ti-box', amount: 0.5,
+              schedule: [true,true,true,true,true,true,true],
+              history: ['available','available','available','available','available','available','available'], streak: 0 },
+            { id: 'r3', title: 'Brush teeth', icon: 'ti-tooth', amount: 0.5,
+              schedule: [true,true,true,true,true,true,true],
+              history: ['available','available','available','available','available','available','available'], streak: 0 },
+            { id: 'r4', title: 'Get dressed by myself', icon: 'ti-shirt', amount: 0.5, schoolReady: true,
+              schedule: [true,true,true,true,true,false,false],
+              history: ['available','available','available','available','available','na','na'], streak: 0 },
+            { id: 'r5', title: 'Pack my bag', icon: 'ti-backpack', amount: 0.5, schoolReady: true,
+              schedule: [true,true,true,true,true,false,false],
+              history: ['available','available','available','available','available','na','na'], streak: 0 },
+          ]
+        },
+        diego: {
+          name: 'Diego', age: 8, avatar: 'D', mode: 'independent',
+          textColor: '#0F6E56', bgColor: '#E1F5EE', accentColor: '#1D9E75',
+          spend: 0, save: 0, give: 0,
+          chores: [
+            { id: 'd1', title: 'Make bed', icon: 'ti-bed', amount: 0.5,
+              schedule: [true,true,true,true,true,true,true],
+              history: ['available','available','available','available','available','available','available'], streak: 0 },
+            { id: 'd2', title: 'Empty dishwasher', icon: 'ti-dish', amount: 1,
+              schedule: [true,true,true,true,true,false,false],
+              history: ['available','available','available','available','available','na','na'], streak: 0 },
+            { id: 'd3', title: 'Take out bins', icon: 'ti-trash', amount: 1.5,
+              schedule: [false,true,false,false,false,false,false],
+              history: ['na','available','na','na','na','na','na'], streak: 0 },
+            { id: 'd4', title: 'Walk to school', icon: 'ti-walk', amount: 1,
+              schedule: [true,true,true,true,true,false,false],
+              history: ['available','available','available','available','available','na','na'], streak: 0 },
+            { id: 'd5', title: 'Homework', icon: 'ti-book', amount: 1,
+              schedule: [true,true,true,true,true,false,false],
+              history: ['available','available','available','available','available','na','na'], streak: 0 },
+            { id: 'd6', title: 'Garden weeding', icon: 'ti-plant', amount: 5, hardWork: true,
+              schedule: [false,false,false,false,false,true,false],
+              history: ['na','na','na','na','na','available','na'], streak: 0 },
+          ]
+        }
+      },
+      pendingApprovals: [],
+      lastResetWeek: null,
+    };
+
+    // ---------- App state ----------
+    let state = null;
+    let view = 'picker';
+    let activeKid = null;
+    let unsubscribe = null;
+    let saveTimer = null;
+    let isOnline = navigator.onLine;
+
+    // ---------- Audio (Mario coin + chimes) ----------
+    let audioCtx = null;
+    let soundOn = true;
+    let chosenVoice = null;
+    let allVoices = [];
+
+    function ensureAudio() {
+      if (!audioCtx) {
+        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+        catch (e) { return null; }
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+
+    function playMarioCoin() {
+      const ctx = ensureAudio(); if (!ctx || !soundOn) return;
+      const t0 = ctx.currentTime;
+      const master = ctx.createGain();
+      master.gain.value = 0.16;
+      master.connect(ctx.destination);
+      const o1 = ctx.createOscillator();
+      const g1 = ctx.createGain();
+      o1.type = 'square';
+      o1.frequency.setValueAtTime(987.77, t0);
+      g1.gain.setValueAtTime(0, t0);
+      g1.gain.linearRampToValueAtTime(1, t0 + 0.005);
+      g1.gain.setValueAtTime(1, t0 + 0.085);
+      g1.gain.linearRampToValueAtTime(0, t0 + 0.095);
+      o1.connect(g1); g1.connect(master);
+      o1.start(t0); o1.stop(t0 + 0.1);
+      const o2 = ctx.createOscillator();
+      const g2 = ctx.createGain();
+      o2.type = 'square';
+      o2.frequency.setValueAtTime(1318.51, t0 + 0.095);
+      g2.gain.setValueAtTime(0, t0 + 0.095);
+      g2.gain.linearRampToValueAtTime(1, t0 + 0.1);
+      g2.gain.setValueAtTime(1, t0 + 0.36);
+      g2.gain.exponentialRampToValueAtTime(0.001, t0 + 0.46);
+      o2.connect(g2); g2.connect(master);
+      o2.start(t0 + 0.095); o2.stop(t0 + 0.48);
+    }
+
+    function playApprovalChime() {
+      const ctx = ensureAudio(); if (!ctx || !soundOn) return;
+      [[1568,0,0.08],[2093,0.06,0.08],[2637,0.12,0.18]].forEach(([f,w,d]) => {
+        const t0 = ctx.currentTime + w;
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(f, t0);
+        g.gain.setValueAtTime(0, t0);
+        g.gain.linearRampToValueAtTime(0.16, t0 + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(t0); osc.stop(t0 + d + 0.05);
+      });
+    }
+
+    // ---------- TTS ----------
+    function rankVoice(v) {
+      const name = v.name.toLowerCase();
+      const lang = (v.lang || '').toLowerCase();
+      let score = 0;
+      if (lang.includes('en-au') || lang.includes('en_au')) score += 100;
+      else if (lang.startsWith('en')) score += 20;
+      if (name.includes('network')) score += 30;
+      if (name.includes('neural')) score += 30;
+      if (name.includes('wavenet')) score += 35;
+      if (name.includes('google') && (lang.includes('en-au') || name.includes('australia'))) score += 25;
+      if (/-au[a-z]?-x-aua/i.test(v.name) || /-au[a-z]?-x-auc/i.test(v.name)) score += 15;
+      if (name.includes('female')) score += 20;
+      if (name.includes('karen') || name.includes('catherine') || name.includes('lisa')) score += 15;
+      if (name.includes('male') && !name.includes('female')) score -= 15;
+      if (/-au[a-z]?-x-aub/i.test(v.name) || /-au[a-z]?-x-aud/i.test(v.name)) score -= 10;
+      return score;
+    }
+
+    function loadAllVoices() {
+      if (!('speechSynthesis' in window)) return [];
+      const voices = window.speechSynthesis.getVoices();
+      return voices
+        .filter(v => /^en/i.test(v.lang))
+        .map(v => ({ voice: v, score: rankVoice(v) }))
+        .sort((a, b) => b.score - a.score)
+        .map(x => x.voice);
+    }
+
+    function speak(text, btnEl) {
+      if (!soundOn) return;
+      if (!('speechSynthesis' in window)) return;
+      if (!chosenVoice) {
+        const list = loadAllVoices();
+        chosenVoice = list[0] || null;
+        // restore saved voice from localStorage
+        const savedName = localStorage.getItem('voice-name');
+        if (savedName) {
+          const v = list.find(v => v.name === savedName);
+          if (v) chosenVoice = v;
+        }
+      }
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      if (chosenVoice) { u.voice = chosenVoice; u.lang = chosenVoice.lang; }
+      else u.lang = 'en-AU';
+      u.rate = 0.95; u.pitch = 1.0; u.volume = 1;
+      if (btnEl) {
+        btnEl.classList.add('speaking');
+        u.onend = () => btnEl.classList.remove('speaking');
+        u.onerror = () => btnEl.classList.remove('speaking');
+      }
+      window.speechSynthesis.speak(u);
+    }
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        allVoices = loadAllVoices();
+        renderVoicePicker();
+      };
+    }
+
+    // ---------- Firestore data layer ----------
+    function familyDocRef() {
+      return doc(db, 'families', FAMILY_ID);
+    }
+
+    async function loadState(user) {
+      const ref = familyDocRef();
+      const snap = await getDoc(ref);
+      if (!snap.exists()) {
+        // First run — seed with defaults
+        await setDoc(ref, {
+          ...DEFAULT_STATE,
+          createdAt: serverTimestamp(),
+          createdBy: user.email,
+        });
+        state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+      } else {
+        const data = snap.data();
+        // Strip Firestore-only fields
+        delete data.createdAt; delete data.createdBy; delete data.updatedAt; delete data.updatedBy;
+        state = data;
+        // Ensure structure (in case schema evolves)
+        if (!state.kids) state.kids = DEFAULT_STATE.kids;
+        if (!state.pendingApprovals) state.pendingApprovals = [];
+      }
+      maybeWeeklyReset();
+    }
+
+    function maybeWeeklyReset() {
+      // If we've crossed into a new ISO week since last reset, clear history
+      const now = new Date();
+      const year = now.getFullYear();
+      const onejan = new Date(year, 0, 1);
+      const week = Math.ceil((((now - onejan) / 86400000) + onejan.getDay() + 1) / 7);
+      const weekKey = `${year}-W${week}`;
+      if (state.lastResetWeek !== weekKey) {
+        // Reset history but preserve streaks if they were maintained
+        Object.values(state.kids).forEach(kid => {
+          kid.chores.forEach(chore => {
+            const lastWeekFullyDone = chore.history.every((h, i) =>
+              !chore.schedule[i] || h === 'done' || h === 'na'
+            );
+            chore.history = chore.schedule.map(s => s ? 'available' : 'na');
+            // Streak persists if last week was fully done; otherwise reset
+            if (!lastWeekFullyDone) chore.streak = 0;
+          });
+        });
+        state.lastResetWeek = weekKey;
+        scheduleSave();
+      }
+    }
+
+    // Listen for remote changes
+    function startListening() {
+      if (unsubscribe) unsubscribe();
+      unsubscribe = onSnapshot(familyDocRef(), (snap) => {
+        if (!snap.exists()) return;
+        // Don't override if save in flight
+        if (saveTimer) return;
+        const data = snap.data();
+        delete data.createdAt; delete data.createdBy; delete data.updatedAt; delete data.updatedBy;
+        // Only update if different
+        if (JSON.stringify(data) !== JSON.stringify(state)) {
+          state = data;
+          render();
+        }
+      }, (err) => {
+        console.warn('Listener error:', err);
+      });
+    }
+
+    function scheduleSave() {
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(async () => {
+        try {
+          const user = auth.currentUser;
+          await setDoc(familyDocRef(), {
+            ...state,
+            updatedAt: serverTimestamp(),
+            updatedBy: user ? user.email : 'unknown',
+          }, { merge: false });
+        } catch (e) {
+          console.warn('Save failed:', e);
+        } finally {
+          saveTimer = null;
+        }
+      }, 500);
+    }
+
+    // ---------- Render ----------
+    function $(id) { return document.getElementById(id); }
+
+    function render() {
+      const root = $('app');
+      const tIdx = todayIdx();
+      let body = '';
+
+      // Top nav (always shown)
+      body += `
+        <div class="top-nav">
+          <button class="nav-btn ${view !== 'parent' ? 'active' : ''}" data-view="picker">Kids tablet</button>
+          <button class="nav-btn ${view === 'parent' ? 'active' : ''}" data-view="parent">Parent CFO</button>
+          <div class="top-nav-right">
+            <button class="icon-btn" id="sound-toggle" aria-label="Toggle sound">
+              <i class="ti ti-volume${soundOn ? '' : '-off'}" style="font-size:16px"></i>
+            </button>
+            <button class="icon-btn" id="signout-btn" aria-label="Sign out">
+              <i class="ti ti-logout" style="font-size:16px"></i>
+            </button>
+          </div>
+        </div>
+      `;
+
+      // Voice picker (only on kids view, only if pre-reader kid is active)
+      if (view === 'kid' && activeKid && state.kids[activeKid].mode === 'pre-reader') {
+        body += `
+          <div class="voice-row">
+            <span><i class="ti ti-microphone" style="font-size:13px"></i> Voice:</span>
+            <select id="voice-select"></select>
+            <button id="test-voice">Test</button>
+          </div>
+        `;
+      }
+
+      if (view === 'parent') body += renderParent(tIdx);
+      else if (view === 'kid' && activeKid) body += renderKid(activeKid, tIdx);
+      else body += renderPicker();
+
+      root.innerHTML = body;
+      attachHandlers();
+      if (view === 'kid' && activeKid && state.kids[activeKid].mode === 'pre-reader') {
+        renderVoicePicker();
+      }
+    }
+
+    function renderPicker() {
+      return `
+        <div class="picker">
+          <p class="picker-title">Who's tapping today?</p>
+          <div class="picker-grid">
+            ${Object.entries(state.kids).map(([id, k]) => `
+              <button class="kid-tile" data-kid="${id}" data-greeting="Hi ${k.name}!" style="background:${k.bgColor}">
+                <div class="kid-avatar" style="background:${k.textColor}">${k.avatar}</div>
+                <p style="font-size:22px;font-weight:500;margin:0;color:${k.textColor}">${k.name}</p>
+                <p style="font-size:13px;margin:0;color:${k.textColor};opacity:0.75">Age ${k.age}</p>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderKid(kidId, tIdx) {
+      const k = state.kids[kidId];
+      const isPre = k.mode === 'pre-reader';
+      const total = (k.spend || 0) + (k.save || 0) + (k.give || 0);
+      return `
+        <div class="kid-header" style="background:${k.bgColor}">
+          <div class="kid-header-left">
+            <div class="kid-header-avatar" style="background:${k.textColor}">${k.avatar}</div>
+            <div>
+              <p style="font-size:18px;font-weight:500;margin:0;color:${k.textColor}">Hi ${k.name}!</p>
+              <p style="font-size:13px;margin:2px 0 0;color:${k.textColor};opacity:0.75">${DAY_NAMES[tIdx]} · Total earned ${fmt(total)}</p>
+            </div>
+          </div>
+          <button class="back-btn" id="back-btn" style="color:${k.textColor};border-color:${k.accentColor}">← Switch</button>
+        </div>
+        ${renderJars(k, isPre)}
+        <div style="margin-top:1.5rem">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin:0 0 12px">
+            <p style="font-size:${isPre ? '17' : '15'}px;font-weight:500;margin:0">${isPre ? '🌟 This week' : 'This week'}</p>
+            <p style="font-size:12px;color:var(--text-secondary);margin:0">${isPre ? 'Tap 🔊 to hear · tap a box to mark done' : 'Tap today or yesterday to mark done'}</p>
+          </div>
+          ${renderChoreGrid(k, isPre, tIdx)}
+        </div>
+      `;
+    }
+
+    function renderJars(k, isPre) {
+      const jars = [
+        { name: 'Spend', amount: k.spend || 0, color: '#378ADD', bgColor: '#E6F1FB', icon: 'ti-shopping-cart', pct: 70 },
+        { name: 'Save',  amount: k.save  || 0, color: '#1D9E75', bgColor: '#E1F5EE', icon: 'ti-pig-money',     pct: 20 },
+        { name: 'Give',  amount: k.give  || 0, color: '#D4537E', bgColor: '#FBEAF0', icon: 'ti-heart',         pct: 10 },
+      ];
+      const maxJar = Math.max(...jars.map(j => j.amount), 10);
+      return `
+        <div class="jars">
+          ${jars.map(j => {
+            const fillH = Math.min(100, (j.amount / maxJar) * 100);
+            return `
+              <div class="jar" style="background:${j.bgColor}">
+                <div class="jar-glass" style="width:${isPre ? 60 : 50}px;height:${isPre ? 72 : 60}px;border-color:${j.color};border-width:3px">
+                  <div class="jar-fill" style="background:${j.color};height:${fillH}%"></div>
+                  <i class="ti ${j.icon} jar-icon" style="font-size:${isPre ? 24 : 20}px;color:${j.color}"></i>
+                </div>
+                <p style="font-size:${isPre ? '15' : '12'}px;font-weight:500;margin:0;color:${j.color}">${j.name}</p>
+                <p style="font-size:${isPre ? '18' : '16'}px;font-weight:500;margin:2px 0 0;color:${j.color}">${fmt(j.amount)}</p>
+                ${!isPre ? `<p style="font-size:10px;margin:2px 0 0;color:${j.color};opacity:0.7">${j.pct}%</p>` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    function renderChoreGrid(k, isPre, tIdx) {
+      return `
+        <div class="chore-grid">
+          <div class="grid-header">
+            <div></div>
+            ${DAYS.map((d, i) => `
+              <div class="grid-header-day ${i === tIdx ? 'today' : ''}">${d}</div>
+            `).join('')}
+          </div>
+          ${(k.chores || []).map(c => renderChoreRow(c, k, isPre, tIdx)).join('')}
+        </div>
+      `;
+    }
+
+    function renderChoreRow(c, k, isPre, tIdx) {
+      const iconCircle = isPre ? 42 : 30;
+      const iconSize = isPre ? 24 : 16;
+      const titleSize = isPre ? 15 : 13;
+      const history = c.history || [];
+      return `
+        <div class="chore-row">
+          <div class="chore-info">
+            <div class="chore-icon-circle" style="width:${iconCircle}px;height:${iconCircle}px;background:${k.bgColor}">
+              <i class="ti ${c.icon}" style="font-size:${iconSize}px;color:${k.textColor}"></i>
+            </div>
+            <div style="min-width:0;flex:1">
+              <div style="display:flex;align-items:center;gap:6px">
+                <p class="chore-title" style="font-size:${titleSize}px">${c.title}${c.hardWork ? ' 💪' : ''}${c.schoolReady ? ' 🎒' : ''}</p>
+                ${isPre ? `<button class="audio-btn" data-text="${c.title.replace(/"/g, '&quot;')}" style="background:${k.bgColor};color:${k.textColor}" aria-label="Hear chore name"><i class="ti ti-volume" style="font-size:14px"></i></button>` : ''}
+              </div>
+              <div class="chore-meta">
+                <span style="font-size:11px;color:var(--text-secondary)">${fmt(c.amount)}</span>
+                ${(c.streak || 0) >= 3 ? `<span style="font-size:11px;color:#BA7517"><i class="ti ti-flame" style="font-size:12px;vertical-align:-1px"></i> ${c.streak}</span>` : ''}
+              </div>
+            </div>
+          </div>
+          ${history.map((status, dIdx) => renderDayCell(status, dIdx, c, k, tIdx)).join('')}
+        </div>
+      `;
+    }
+
+    function renderDayCell(status, dIdx, chore, k, tIdx) {
+      const isToday = dIdx === tIdx;
+      const isYesterday = dIdx === tIdx - 1;
+      const isFuture = dIdx > tIdx;
+      const todayClass = isToday ? 'today' : '';
+
+      let inner = '', bg = 'transparent', border = 'none', clickable = '';
+
+      if (status === 'na') inner = '<span style="color:var(--text-tertiary);font-size:11px">—</span>';
+      else if (status === 'locked' || isFuture) inner = '<i class="ti ti-lock" style="font-size:11px;color:var(--text-tertiary)"></i>';
+      else if (status === 'done') {
+        inner = '<i class="ti ti-check" style="font-size:16px;color:white"></i>';
+        bg = '#1D9E75';
+      } else if (status === 'pending') {
+        inner = '<i class="ti ti-clock" style="font-size:14px;color:#BA7517"></i>';
+        bg = 'var(--warning-bg)'; border = '0.5px solid var(--warning-text)';
+      } else if (status === 'missed') {
+        if (isYesterday) {
+          border = `1px dashed ${k.accentColor}`;
+          clickable = `tickable" data-chore="${chore.id}" data-day="${dIdx}`;
+          inner = `<span style="color:${k.accentColor};font-size:16px;font-weight:500">+</span>`;
+        } else {
+          inner = '<i class="ti ti-x" style="font-size:14px;color:var(--text-tertiary)"></i>';
+          border = '0.5px solid var(--border)';
+        }
+      } else if (status === 'available') {
+        if (isToday || isYesterday) {
+          bg = isToday ? k.bgColor : 'transparent';
+          border = isToday ? `1px solid ${k.accentColor}` : `1px dashed ${k.accentColor}`;
+          clickable = `tickable" data-chore="${chore.id}" data-day="${dIdx}`;
+          inner = `<span style="color:${k.accentColor};font-size:18px;font-weight:500">+</span>`;
+        } else {
+          inner = '<i class="ti ti-x" style="font-size:14px;color:var(--text-tertiary)"></i>';
+          border = '0.5px solid var(--border)';
+        }
+      }
+      return `<div class="day-cell ${todayClass} ${clickable}" style="background:${bg};border:${border}">${inner}</div>`;
+    }
+
+    function renderParent(tIdx) {
+      const totals = Object.values(state.kids).reduce((acc, k) => ({
+        spend: acc.spend + (k.spend || 0),
+        save:  acc.save  + (k.save  || 0),
+        give:  acc.give  + (k.give  || 0),
+      }), { spend: 0, save: 0, give: 0 });
+      const grand = totals.spend + totals.save + totals.give;
+
+      const note = generateManagerNote(tIdx);
+
+      return `
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+            <div>
+              <p style="font-size:16px;font-weight:500;margin:0">Family CFO</p>
+              <p style="font-size:13px;margin:2px 0 0;color:var(--text-secondary)">${new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+            </div>
+            ${state.pendingApprovals.length ? `<div style="background:var(--info-bg);color:var(--info-text);padding:4px 12px;border-radius:var(--radius-md);font-size:12px;font-weight:500"><i class="ti ti-bell" style="font-size:13px;vertical-align:-1px"></i> ${state.pendingApprovals.length} pending</div>` : ''}
+          </div>
+          <div class="stat-grid">
+            <div class="stat-card" style="background:var(--bg-secondary)">
+              <p class="stat-label" style="color:var(--text-secondary)">Family wealth</p>
+              <p class="stat-value">${fmt(grand)}</p>
+            </div>
+            <div class="stat-card" style="background:#E6F1FB">
+              <p class="stat-label" style="color:#185FA5">Spend</p>
+              <p class="stat-value" style="color:#185FA5">${fmt(totals.spend)}</p>
+            </div>
+            <div class="stat-card" style="background:#E1F5EE">
+              <p class="stat-label" style="color:#0F6E56">Save</p>
+              <p class="stat-value" style="color:#0F6E56">${fmt(totals.save)}</p>
+            </div>
+            <div class="stat-card" style="background:#FBEAF0">
+              <p class="stat-label" style="color:#993556">Give</p>
+              <p class="stat-value" style="color:#993556">${fmt(totals.give)}</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <p style="font-size:14px;font-weight:500;margin:0 0 12px"><i class="ti ti-clock" style="font-size:16px;vertical-align:-2px;color:var(--warning-text)"></i> Pending approvals</p>
+          ${state.pendingApprovals.length === 0
+            ? `<p style="font-size:13px;color:var(--text-secondary);margin:0;padding:1rem 0;text-align:center">All caught up.</p>`
+            : state.pendingApprovals.map((p, i) => {
+              const k = state.kids[p.kid];
+              return `
+                <div class="approval-row">
+                  <div class="approval-avatar" style="background:${k.textColor}">${k.avatar}</div>
+                  <div style="flex:1;min-width:0">
+                    <p style="font-size:14px;margin:0;font-weight:500">${p.chore}${p.hardWork ? ' 💪' : ''}</p>
+                    <p style="font-size:12px;margin:2px 0 0;color:var(--text-secondary)">${k.name} · ${fmt(p.amount)} · ${p.time}</p>
+                  </div>
+                  <button class="approve-btn" data-idx="${i}">Approve</button>
+                  <button class="reject-btn" data-idx="${i}">Reject</button>
+                </div>
+              `;
+            }).join('')}
+        </div>
+
+        ${renderChoreManagement()}
+
+        <div class="manager-note">
+          <i class="ti ti-sparkles" style="font-size:20px;flex-shrink:0;margin-top:2px"></i>
+          <div>
+            <p style="font-size:13px;font-weight:500;margin:0">Manager's note</p>
+            <p style="font-size:12px;margin:4px 0 0;line-height:1.5">${note}</p>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderChoreManagement() {
+      return `
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <p style="font-size:14px;font-weight:500;margin:0"><i class="ti ti-list-check" style="font-size:16px;vertical-align:-2px"></i> Chore management</p>
+            <button id="add-chore-btn" style="border:0.5px solid var(--border);background:var(--bg-primary);padding:6px 12px;border-radius:var(--radius-md);font-size:12px"><i class="ti ti-plus" style="font-size:13px;vertical-align:-1px"></i> Add chore</button>
+          </div>
+          <div id="add-chore-form" style="display:none;background:var(--bg-secondary);padding:1rem;border-radius:var(--radius-md);margin-bottom:12px">
+            <div class="form-row">
+              <label>For which kid?</label>
+              <select id="new-chore-kid">
+                ${Object.entries(state.kids).map(([id, k]) => `<option value="${id}">${k.name}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-row">
+              <label>Chore name</label>
+              <input type="text" id="new-chore-title" placeholder="e.g. Feed the dog" maxlength="40">
+            </div>
+            <div class="form-row">
+              <label>Amount ($)</label>
+              <input type="number" id="new-chore-amount" min="0" max="20" step="0.5" value="0.5">
+            </div>
+            <div class="form-row">
+              <label>Days assigned</label>
+              <div class="day-toggles" id="new-chore-days">
+                ${DAYS.map((d, i) => `<button type="button" class="day-toggle active" data-day="${i}">${d}</button>`).join('')}
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button id="save-chore-btn" style="flex:1;background:#0F6E56;color:white;border:none;padding:10px;border-radius:var(--radius-md);font-size:14px;font-weight:500">Save</button>
+              <button id="cancel-chore-btn" style="border:0.5px solid var(--border);background:var(--bg-primary);padding:10px 16px;border-radius:var(--radius-md);font-size:14px">Cancel</button>
+            </div>
+          </div>
+
+          ${Object.entries(state.kids).map(([kid, k]) => `
+            <p style="font-size:12px;color:var(--text-secondary);margin:12px 0 6px;font-weight:500">${k.name}'s chores</p>
+            ${(k.chores || []).map(c => `
+              <div class="chore-mgmt-row">
+                <i class="ti ${c.icon}" style="font-size:18px;color:${k.textColor}"></i>
+                <div style="flex:1;min-width:0">
+                  <p style="font-size:13px;margin:0;font-weight:500">${c.title}${c.hardWork ? ' 💪' : ''}${c.schoolReady ? ' 🎒' : ''}</p>
+                  <p style="font-size:11px;margin:2px 0 0;color:var(--text-secondary)">${fmt(c.amount)} · ${c.schedule.filter(Boolean).length} days/wk</p>
+                </div>
+                <button class="delete-chore-btn" data-kid="${kid}" data-chore-id="${c.id}" style="border:none;background:transparent;color:var(--danger-text);padding:4px"><i class="ti ti-trash" style="font-size:16px"></i></button>
+              </div>
+            `).join('')}
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function generateManagerNote(tIdx) {
+      const insights = [];
+      Object.entries(state.kids).forEach(([id, k]) => {
+        // Streaks
+        const longStreaks = (k.chores || []).filter(c => (c.streak || 0) >= 3);
+        if (longStreaks.length) {
+          const top = longStreaks.sort((a,b) => (b.streak||0) - (a.streak||0))[0];
+          insights.push(`${k.name} on a ${top.streak}-day streak with ${top.title.toLowerCase()} — call it out`);
+        }
+        // Repeat misses
+        (k.chores || []).forEach(c => {
+          const missedThisWeek = c.history.slice(0, tIdx).filter((h,i) => c.schedule[i] && h === 'missed').length;
+          if (missedThisWeek >= 2) {
+            insights.push(`${k.name} skipped "${c.title}" ${missedThisWeek}× this week — worth a chat`);
+          }
+        });
+      });
+      if (!insights.length) return "Nothing flagged this week. Keep an eye on streaks as they build.";
+      return insights.slice(0, 2).join('. ') + '.';
+    }
+
+    function renderVoicePicker() {
+      const select = $('voice-select');
+      if (!select) return;
+      if (!allVoices.length) allVoices = loadAllVoices();
+      if (!allVoices.length) {
+        select.innerHTML = '<option>Loading voices…</option>';
+        return;
+      }
+      if (!chosenVoice && allVoices.length) {
+        const savedName = localStorage.getItem('voice-name');
+        chosenVoice = (savedName && allVoices.find(v => v.name === savedName)) || allVoices[0];
+      }
+      select.innerHTML = allVoices.map((v, i) => {
+        const isAussie = /en[-_]?au/i.test(v.lang);
+        const flag = isAussie ? '🇦🇺 ' : '';
+        const sel = chosenVoice && v.name === chosenVoice.name ? 'selected' : '';
+        return `<option value="${i}" ${sel}>${flag}${v.name} (${v.lang})</option>`;
+      }).join('');
+    }
+
+    // ---------- Burst animation ----------
+    function showBurst(x, y, color) {
+      const el = document.createElement('div');
+      el.className = 'burst';
+      el.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:32px;height:32px;background:${color};border-radius:50%;z-index:998`;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 600);
+    }
+
+    // ---------- Handlers ----------
+    function attachHandlers() {
+      document.querySelectorAll('.nav-btn').forEach(b => {
+        b.onclick = () => {
+          ensureAudio();
+          view = b.dataset.view === 'parent' ? 'parent' : 'picker';
+          activeKid = null;
+          render();
+        };
+      });
+      document.querySelectorAll('.kid-tile').forEach(b => {
+        b.onclick = () => {
+          ensureAudio();
+          speak(b.dataset.greeting);
+          activeKid = b.dataset.kid;
+          view = 'kid';
+          render();
+        };
+      });
+      const back = $('back-btn');
+      if (back) back.onclick = () => { view = 'picker'; activeKid = null; render(); };
+
+      document.querySelectorAll('.audio-btn').forEach(b => {
+        b.onclick = (e) => {
+          e.stopPropagation();
+          ensureAudio();
+          speak(b.dataset.text, b);
+        };
+      });
+
+      document.querySelectorAll('.day-cell.tickable').forEach(cell => {
+        cell.onclick = () => {
+          const choreId = cell.dataset.chore;
+          const dIdx = parseInt(cell.dataset.day);
+          const kid = state.kids[activeKid];
+          const chore = kid.chores.find(c => c.id === choreId);
+          if (!chore) return;
+          chore.history[dIdx] = 'pending';
+          state.pendingApprovals.push({
+            kid: activeKid, chore: chore.title, amount: chore.amount,
+            time: dIdx === todayIdx() ? 'just now' : 'yesterday',
+            dayIdx: dIdx, choreId, hardWork: chore.hardWork || false
+          });
+          playMarioCoin();
+          const r = cell.getBoundingClientRect();
+          showBurst(r.left + r.width/2, r.top + r.height/2, kid.accentColor);
+          scheduleSave();
+          render();
+        };
+      });
+
+      document.querySelectorAll('.approve-btn').forEach(b => {
+        b.onclick = () => {
+          const idx = parseInt(b.dataset.idx);
+          const p = state.pendingApprovals[idx];
+          const kid = state.kids[p.kid];
+          const chore = kid.chores.find(c => c.id === p.choreId);
+          if (chore) {
+            chore.history[p.dayIdx] = 'done';
+            let streak = 0;
+            for (let i = p.dayIdx; i >= 0; i--) {
+              if (chore.history[i] === 'done') streak++;
+              else if (chore.history[i] === 'na') continue;
+              else break;
+            }
+            chore.streak = streak;
+          }
+          kid.spend = (kid.spend || 0) + p.amount * 0.7;
+          kid.save  = (kid.save  || 0) + p.amount * 0.2;
+          kid.give  = (kid.give  || 0) + p.amount * 0.1;
+          state.pendingApprovals.splice(idx, 1);
+          playApprovalChime();
+          scheduleSave();
+          render();
+        };
+      });
+      document.querySelectorAll('.reject-btn').forEach(b => {
+        b.onclick = () => {
+          const idx = parseInt(b.dataset.idx);
+          const p = state.pendingApprovals[idx];
+          const kid = state.kids[p.kid];
+          const chore = kid.chores.find(c => c.id === p.choreId);
+          if (chore) chore.history[p.dayIdx] = 'available';
+          state.pendingApprovals.splice(idx, 1);
+          scheduleSave();
+          render();
+        };
+      });
+
+      // Sound + signout + voice
+      const sb = $('sound-toggle');
+      if (sb) sb.onclick = () => {
+        soundOn = !soundOn;
+        if (soundOn) ensureAudio();
+        else if (window.speechSynthesis) window.speechSynthesis.cancel();
+        sb.querySelector('i').className = soundOn ? 'ti ti-volume' : 'ti ti-volume-off';
+      };
+      const so = $('signout-btn');
+      if (so) so.onclick = () => signOut(auth);
+
+      const vs = $('voice-select');
+      if (vs) {
+        vs.onchange = () => {
+          const i = parseInt(vs.value);
+          if (allVoices[i]) {
+            chosenVoice = allVoices[i];
+            localStorage.setItem('voice-name', chosenVoice.name);
+            speak('Hi, this is your test voice.');
+          }
+        };
+      }
+      const tv = $('test-voice');
+      if (tv) tv.onclick = () => { ensureAudio(); speak('Hi! Time to do your chores.'); };
+
+      // Chore management
+      const addBtn = $('add-chore-btn');
+      if (addBtn) addBtn.onclick = () => {
+        const f = $('add-chore-form');
+        f.style.display = f.style.display === 'none' ? 'block' : 'none';
+      };
+      const cancelBtn = $('cancel-chore-btn');
+      if (cancelBtn) cancelBtn.onclick = () => { $('add-chore-form').style.display = 'none'; };
+
+      document.querySelectorAll('.day-toggle').forEach(b => {
+        b.onclick = () => b.classList.toggle('active');
+      });
+
+      const saveBtn = $('save-chore-btn');
+      if (saveBtn) saveBtn.onclick = () => {
+        const kidId = $('new-chore-kid').value;
+        const title = $('new-chore-title').value.trim();
+        const amount = parseFloat($('new-chore-amount').value) || 0;
+        if (!title) return alert('Please enter a chore name');
+        const days = Array.from(document.querySelectorAll('.day-toggle')).map(b => b.classList.contains('active'));
+        const tIdx = todayIdx();
+        const newChore = {
+          id: 'c' + Date.now(),
+          title, icon: 'ti-circle-check', amount,
+          schedule: days,
+          history: days.map((d, i) => i > tIdx ? (d ? 'available' : 'na') : (d ? 'available' : 'na')),
+          streak: 0
+        };
+        if (!state.kids[kidId].chores) state.kids[kidId].chores = [];
+        state.kids[kidId].chores.push(newChore);
+        scheduleSave();
+        render();
+      };
+
+      document.querySelectorAll('.delete-chore-btn').forEach(b => {
+        b.onclick = () => {
+          if (!confirm('Delete this chore?')) return;
+          const kid = b.dataset.kid;
+          const cid = b.dataset.choreId;
+          state.kids[kid].chores = (state.kids[kid].chores || []).filter(c => c.id !== cid);
+          scheduleSave();
+          render();
+        };
+      });
+    }
+
+    // ---------- Auth flow ----------
+    onAuthStateChanged(auth, async (user) => {
+      $('loading').style.display = 'none';
+      if (user) {
+        $('login-screen').style.display = 'none';
+        $('app').style.display = 'block';
+        await loadState(user);
+        startListening();
+        render();
+      } else {
+        $('login-screen').style.display = 'flex';
+        $('app').style.display = 'none';
+        if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+      }
+    });
+
+    $('signin-btn').onclick = async () => {
+      const email = $('email').value.trim();
+      const password = $('password').value;
+      const errEl = $('login-error');
+      errEl.textContent = '';
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (e) {
+        errEl.textContent = e.code === 'auth/invalid-credential' ? 'Wrong email or password.' : (e.message || 'Sign in failed.');
+      }
+    };
+    $('password').onkeydown = (e) => { if (e.key === 'Enter') $('signin-btn').click(); };
+
+    // Online/offline indicator
+    function setConn() {
+      isOnline = navigator.onLine;
+      $('conn-status').classList.toggle('offline', !isOnline);
+    }
+    window.addEventListener('online', setConn);
+    window.addEventListener('offline', setConn);
+    setConn();
+
+    // Service worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js').catch(console.warn);
+      });
+    }
+  </script>
+</body>
+</html>
