@@ -1,6 +1,6 @@
 // Service worker for Family CFO PWA
 // Handles offline support and asset caching
-const CACHE_NAME = 'family-cfo-v2';
+const CACHE_NAME = 'family-cfo-v3';
 const ASSETS = [
   './',
   './index.html',
