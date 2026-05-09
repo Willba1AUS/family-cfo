@@ -457,6 +457,14 @@
       background: #0F6E56; color: white; border-color: #0F6E56;
     }
 
+    /* Action prompts (Save transfer, Give quarterly) */
+    .action-prompt {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 0;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .action-prompt:last-child { border-bottom: none; }
+
     /* Flag toggle (schoolReady / hardWork) */
     .flag-toggle {
       display: flex; gap: 6px; flex-wrap: wrap;
@@ -536,45 +544,62 @@
           name: 'Rafa', age: 4, avatar: 'R', mode: 'pre-reader',
           textColor: '#993C1D', bgColor: '#FAECE7', accentColor: '#D85A30',
           spend: 0, save: 0, give: 0,
+          spendHistory: [], saveHistory: [], giveHistory: [],
+          goal: { enabled: false, name: '', target: 0, matchRatio: 1 },
           chores: [
-            { id: 'r1', title: 'Put shoes away', icon: 'ti-shoe', amount: 0.5,
+            // Routines (unpaid — being part of the family)
+            { id: 'r1', title: 'Put shoes away', icon: 'ti-shoe', amount: 0, paid: false, category: 'routines',
               schedule: [true,true,true,true,true,true,true],
               history: ['available','available','available','available','available','available','available'], streak: 0 },
-            { id: 'r2', title: 'Pack toys away', icon: 'ti-box', amount: 0.5,
+            { id: 'r2', title: 'Pack toys away', icon: 'ti-box', amount: 0, paid: false, category: 'routines',
               schedule: [true,true,true,true,true,true,true],
               history: ['available','available','available','available','available','available','available'], streak: 0 },
-            { id: 'r3', title: 'Brush teeth', icon: 'ti-tooth', amount: 0.5,
+            { id: 'r3', title: 'Brush teeth', icon: 'ti-tooth', amount: 0, paid: false, category: 'routines',
               schedule: [true,true,true,true,true,true,true],
               history: ['available','available','available','available','available','available','available'], streak: 0 },
-            { id: 'r4', title: 'Get dressed by myself', icon: 'ti-shirt', amount: 0.5, schoolReady: true,
+            { id: 'r4', title: 'Get dressed by myself', icon: 'ti-shirt', amount: 0, paid: false, category: 'routines', schoolReady: true,
               schedule: [true,true,true,true,true,false,false],
               history: ['available','available','available','available','available','na','na'], streak: 0 },
-            { id: 'r5', title: 'Pack my bag', icon: 'ti-backpack', amount: 0.5, schoolReady: true,
+            { id: 'r5', title: 'Pack my bag', icon: 'ti-backpack', amount: 0, paid: false, category: 'routines', schoolReady: true,
               schedule: [true,true,true,true,true,false,false],
               history: ['available','available','available','available','available','na','na'], streak: 0 },
+            // Extras (paid — real work, target ~$5/wk = age × $1)
+            { id: 'r6', title: 'Help unpack groceries', icon: 'ti-apple', amount: 1, paid: true, category: 'extras',
+              schedule: [false,false,false,false,false,true,false],
+              history: ['na','na','na','na','na','available','na'], streak: 0 },
+            { id: 'r7', title: 'Wipe table after dinner', icon: 'ti-soap', amount: 0.5, paid: true, category: 'extras',
+              schedule: [true,true,true,true,true,true,true],
+              history: ['available','available','available','available','available','available','available'], streak: 0 },
+            { id: 'r8', title: 'Help wash the car', icon: 'ti-tools', amount: 1, paid: true, category: 'extras', hardWork: true,
+              schedule: [false,false,false,false,false,true,false],
+              history: ['na','na','na','na','na','available','na'], streak: 0 },
           ]
         },
         diego: {
           name: 'Diego', age: 8, avatar: 'D', mode: 'independent',
           textColor: '#0F6E56', bgColor: '#E1F5EE', accentColor: '#1D9E75',
           spend: 0, save: 0, give: 0,
+          spendHistory: [], saveHistory: [], giveHistory: [],
+          goal: { enabled: false, name: '', target: 0, matchRatio: 1 },
           chores: [
-            { id: 'd1', title: 'Make bed', icon: 'ti-bed', amount: 0.5,
+            // Routines (unpaid)
+            { id: 'd1', title: 'Make bed', icon: 'ti-bed', amount: 0, paid: false, category: 'routines',
               schedule: [true,true,true,true,true,true,true],
               history: ['available','available','available','available','available','available','available'], streak: 0 },
-            { id: 'd2', title: 'Empty dishwasher', icon: 'ti-dish', amount: 1,
+            { id: 'd4', title: 'Walk to school', icon: 'ti-walk', amount: 0, paid: false, category: 'routines',
               schedule: [true,true,true,true,true,false,false],
               history: ['available','available','available','available','available','na','na'], streak: 0 },
-            { id: 'd3', title: 'Take out bins', icon: 'ti-trash', amount: 1.5,
+            { id: 'd5', title: 'Homework', icon: 'ti-book', amount: 0, paid: false, category: 'routines',
+              schedule: [true,true,true,true,true,false,false],
+              history: ['available','available','available','available','available','na','na'], streak: 0 },
+            // Extras (paid — target ~$8/wk = age × $1)
+            { id: 'd2', title: 'Empty dishwasher', icon: 'ti-dish', amount: 1, paid: true, category: 'extras',
+              schedule: [true,true,true,true,true,false,false],
+              history: ['available','available','available','available','available','na','na'], streak: 0 },
+            { id: 'd3', title: 'Take out bins', icon: 'ti-trash', amount: 1.5, paid: true, category: 'extras',
               schedule: [false,true,false,false,false,false,false],
               history: ['na','available','na','na','na','na','na'], streak: 0 },
-            { id: 'd4', title: 'Walk to school', icon: 'ti-walk', amount: 1,
-              schedule: [true,true,true,true,true,false,false],
-              history: ['available','available','available','available','available','na','na'], streak: 0 },
-            { id: 'd5', title: 'Homework', icon: 'ti-book', amount: 1,
-              schedule: [true,true,true,true,true,false,false],
-              history: ['available','available','available','available','available','na','na'], streak: 0 },
-            { id: 'd6', title: 'Garden weeding', icon: 'ti-plant', amount: 5, hardWork: true,
+            { id: 'd6', title: 'Garden weeding', icon: 'ti-plant', amount: 3, paid: true, category: 'extras', hardWork: true,
               schedule: [false,false,false,false,false,true,false],
               history: ['na','na','na','na','na','available','na'], streak: 0 },
           ]
@@ -582,6 +607,7 @@
       },
       pendingApprovals: [],
       lastResetWeek: null,
+      lastGiveQuarter: null,
     };
 
     // ---------- Icon palette for chore picker ----------
@@ -801,8 +827,25 @@
         // Ensure structure (in case schema evolves)
         if (!state.kids) state.kids = DEFAULT_STATE.kids;
         if (!state.pendingApprovals) state.pendingApprovals = [];
+        migrateToV3();
       }
       maybeWeeklyReset();
+    }
+
+    function migrateToV3() {
+      // Add paid, category, history arrays, goal — for any docs created before Batch 2
+      Object.values(state.kids).forEach(kid => {
+        if (!kid.spendHistory) kid.spendHistory = [];
+        if (!kid.saveHistory) kid.saveHistory = [];
+        if (!kid.giveHistory) kid.giveHistory = [];
+        if (!kid.goal) kid.goal = { enabled: false, name: '', target: 0, matchRatio: 1 };
+        (kid.chores || []).forEach(c => {
+          if (c.paid === undefined) c.paid = (c.amount > 0); // existing chores with $ stay paid
+          if (!c.category) c.category = c.paid ? 'extras' : 'routines';
+          if (!c.paid) c.amount = 0; // ensure unpaid have $0
+        });
+      });
+      if (!state.lastGiveQuarter) state.lastGiveQuarter = null;
     }
 
     function maybeWeeklyReset() {
@@ -841,6 +884,8 @@
         // Only update if different
         if (JSON.stringify(data) !== JSON.stringify(state)) {
           state = data;
+          if (!state.pendingApprovals) state.pendingApprovals = [];
+          migrateToV3();
           render();
         }
       }, (err) => {
@@ -966,17 +1011,24 @@
 
     function renderJars(k, isPre) {
       const jars = [
-        { name: 'Spend', amount: k.spend || 0, color: '#378ADD', bgColor: '#E6F1FB', icon: 'ti-shopping-cart', pct: 70 },
+        { name: 'Spend', amount: k.spend || 0, color: '#378ADD', bgColor: '#E6F1FB', icon: 'ti-shopping-cart', pct: 70, action: 'spend' },
         { name: 'Save',  amount: k.save  || 0, color: '#1D9E75', bgColor: '#E1F5EE', icon: 'ti-pig-money',     pct: 20 },
         { name: 'Give',  amount: k.give  || 0, color: '#D4537E', bgColor: '#FBEAF0', icon: 'ti-heart',         pct: 10 },
       ];
       const maxJar = Math.max(...jars.map(j => j.amount), 10);
+      // Goal overlay info for Save jar
+      const goal = k.goal || {};
+      const showGoal = goal.enabled && goal.target > 0;
       return `
         <div class="jars">
           ${jars.map(j => {
             const fillH = Math.min(100, (j.amount / maxJar) * 100);
+            const isSpendActionable = j.action === 'spend' && (k.spend || 0) > 0;
+            const idAttr = isSpendActionable ? 'id="spend-jar-action"' : '';
+            const cursorStyle = isSpendActionable ? 'cursor:pointer' : '';
+            const canSpendHint = isSpendActionable && !isPre ? `<p style="font-size:9px;margin:2px 0 0;color:${j.color};opacity:0.7">tap to spend</p>` : '';
             return `
-              <div class="jar" style="background:${j.bgColor}">
+              <div class="jar" ${idAttr} style="background:${j.bgColor};${cursorStyle}">
                 <div class="jar-glass" style="width:${isPre ? 60 : 50}px;height:${isPre ? 72 : 60}px;border-color:${j.color};border-width:3px">
                   <div class="jar-fill" style="background:${j.color};height:${fillH}%"></div>
                   <i class="ti ${j.icon} jar-icon" style="font-size:${isPre ? 24 : 20}px;color:${j.color}"></i>
@@ -984,23 +1036,57 @@
                 <p style="font-size:${isPre ? '15' : '12'}px;font-weight:500;margin:0;color:${j.color}">${j.name}</p>
                 <p style="font-size:${isPre ? '18' : '16'}px;font-weight:500;margin:2px 0 0;color:${j.color}">${fmt(j.amount)}</p>
                 ${!isPre ? `<p style="font-size:10px;margin:2px 0 0;color:${j.color};opacity:0.7">${j.pct}%</p>` : ''}
+                ${canSpendHint}
               </div>
             `;
           }).join('')}
+        </div>
+        ${showGoal ? renderGoalBar(k) : ''}
+      `;
+    }
+
+    function renderGoalBar(k) {
+      const goal = k.goal || {};
+      const matched = (k.save || 0) * (goal.matchRatio || 0);
+      const total = (k.save || 0) + matched;
+      const pct = Math.min(100, Math.round(100 * total / goal.target));
+      return `
+        <div style="margin-top:12px;padding:12px;background:var(--bg-secondary);border-radius:var(--radius-md);border:0.5px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+            <p style="font-size:13px;font-weight:500;margin:0">🎯 ${goal.name}</p>
+            <p style="font-size:13px;margin:0;color:#0F6E56;font-weight:500">${fmt(total)} / ${fmt(goal.target)}</p>
+          </div>
+          <div style="height:8px;background:var(--bg-primary);border-radius:4px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:#0F6E56;transition:width 0.4s ease"></div>
+          </div>
+          ${goal.matchRatio > 0 ? `<p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0">incl. ${goal.matchRatio}:1 match (${fmt(matched)}). Keep saving!</p>` : ''}
         </div>
       `;
     }
 
     function renderChoreGrid(k, isPre, tIdx) {
+      const chores = k.chores || [];
+      const routines = chores.filter(c => !c.paid);
+      const extras = chores.filter(c => c.paid);
+      const sectionHeader = (label, sub) => `
+        <div style="display:flex;align-items:baseline;gap:8px;padding:10px 0 4px;border-top:0.5px solid var(--border);margin-top:8px">
+          <p style="font-size:12px;font-weight:500;margin:0;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px">${label}</p>
+          <p style="font-size:11px;color:var(--text-tertiary);margin:0">${sub}</p>
+        </div>`;
+      const headerRow = `
+        <div class="grid-header">
+          <div></div>
+          ${DAYS.map((d, i) => `
+            <div class="grid-header-day ${i === tIdx ? 'today' : ''}">${d}</div>
+          `).join('')}
+        </div>`;
       return `
         <div class="chore-grid">
-          <div class="grid-header">
-            <div></div>
-            ${DAYS.map((d, i) => `
-              <div class="grid-header-day ${i === tIdx ? 'today' : ''}">${d}</div>
-            `).join('')}
-          </div>
-          ${(k.chores || []).map(c => renderChoreRow(c, k, isPre, tIdx)).join('')}
+          ${headerRow}
+          ${routines.length ? sectionHeader('🌟 Routines', 'being part of the family') : ''}
+          ${routines.map(c => renderChoreRow(c, k, isPre, tIdx)).join('')}
+          ${extras.length ? sectionHeader('💼 Paid jobs', `extras you can earn money on`) : ''}
+          ${extras.map(c => renderChoreRow(c, k, isPre, tIdx)).join('')}
         </div>
       `;
     }
@@ -1010,6 +1096,9 @@
       const iconSize = isPre ? 24 : 16;
       const titleSize = isPre ? 15 : 13;
       const history = c.history || [];
+      const moneyLabel = c.paid
+        ? `<span style="font-size:11px;color:var(--text-secondary)">${fmt(c.amount)}</span>`
+        : `<span style="font-size:10px;color:var(--text-tertiary);background:var(--bg-tertiary);padding:1px 6px;border-radius:8px">routine</span>`;
       return `
         <div class="chore-row">
           <div class="chore-info">
@@ -1022,7 +1111,7 @@
                 ${isPre ? `<button class="audio-btn" data-text="${c.title.replace(/"/g, '&quot;')}" style="background:${k.bgColor};color:${k.textColor}" aria-label="Hear chore name"><i class="ti ti-volume" style="font-size:14px"></i></button>` : ''}
               </div>
               <div class="chore-meta">
-                <span style="font-size:11px;color:var(--text-secondary)">${fmt(c.amount)}</span>
+                ${moneyLabel}
                 ${(c.streak || 0) >= 3 ? `<span style="font-size:11px;color:#BA7517"><i class="ti ti-flame" style="font-size:12px;vertical-align:-1px"></i> ${c.streak}</span>` : ''}
               </div>
             </div>
@@ -1048,6 +1137,8 @@
       } else if (status === 'pending') {
         inner = '<i class="ti ti-clock" style="font-size:14px;color:#BA7517"></i>';
         bg = 'var(--warning-bg)'; border = '0.5px solid var(--warning-text)';
+        // Allow untick on today only — yesterday's pending should sit and wait for parent
+        if (isToday) clickable = `tickable" data-chore="${chore.id}" data-day="${dIdx}`;
       } else if (status === 'missed') {
         if (isYesterday) {
           border = `1px dashed ${k.accentColor}`;
@@ -1110,6 +1201,9 @@
           </div>
         </div>
 
+        ${renderActionPrompts()}
+        ${renderDashboard(tIdx)}
+
         <div class="card">
           <p style="font-size:14px;font-weight:500;margin:0 0 12px"><i class="ti ti-clock" style="font-size:16px;vertical-align:-2px;color:var(--warning-text)"></i> Pending approvals</p>
           ${state.pendingApprovals.length === 0
@@ -1140,6 +1234,152 @@
             <p style="font-size:13px;font-weight:500;margin:0">Manager's note</p>
             <p style="font-size:12px;margin:4px 0 0;line-height:1.5">${note}</p>
           </div>
+        </div>
+      `;
+    }
+
+    // ---------- Action prompts (Save transfer + Give quarterly) ----------
+    function getCurrentQuarter() {
+      const d = new Date();
+      return `${d.getFullYear()}-Q${Math.floor(d.getMonth()/3) + 1}`;
+    }
+
+    function renderActionPrompts() {
+      const prompts = [];
+      const SAVE_THRESHOLD = 20;
+
+      Object.entries(state.kids).forEach(([kidId, k]) => {
+        if ((k.save || 0) >= SAVE_THRESHOLD) {
+          prompts.push(`
+            <div class="action-prompt save-prompt">
+              <i class="ti ti-arrow-up-right" style="font-size:18px;flex-shrink:0;color:#0F6E56"></i>
+              <div style="flex:1">
+                <p style="font-size:13px;margin:0;font-weight:500">Time to transfer ${k.name}'s savings</p>
+                <p style="font-size:12px;margin:2px 0 0;color:var(--text-secondary)">${fmt(k.save)} ready to move into a real high-interest account (ING/UBank/ME).</p>
+              </div>
+              <button class="save-transfer-btn" data-kid="${kidId}" style="border:none;background:#0F6E56;color:white;padding:8px 14px;border-radius:var(--radius-md);font-size:12px;font-weight:500;flex-shrink:0">Mark transferred</button>
+            </div>
+          `);
+        }
+      });
+
+      // Quarterly Give prompt — only fires once per calendar quarter
+      const currentQ = getCurrentQuarter();
+      if (state.lastGiveQuarter !== currentQ) {
+        const totalGive = Object.values(state.kids).reduce((a, k) => a + (k.give || 0), 0);
+        if (totalGive >= 5) {
+          prompts.push(`
+            <div class="action-prompt give-prompt">
+              <i class="ti ti-heart" style="font-size:18px;flex-shrink:0;color:#993556"></i>
+              <div style="flex:1">
+                <p style="font-size:13px;margin:0;font-weight:500">Time to give! 🎁</p>
+                <p style="font-size:12px;margin:2px 0 0;color:var(--text-secondary)">Quarterly giving — pick a charity together with the boys. Total to give: ${fmt(totalGive)}.</p>
+              </div>
+              <button id="give-quarterly-btn" style="border:none;background:#993556;color:white;padding:8px 14px;border-radius:var(--radius-md);font-size:12px;font-weight:500;flex-shrink:0">Choose charity</button>
+            </div>
+          `);
+        }
+      }
+
+      if (!prompts.length) return '';
+      return `<div class="card" style="background:#FFF8EC">${prompts.join('')}</div>`;
+    }
+
+    // ---------- Parent dashboard ----------
+    function renderDashboard(tIdx) {
+      return `
+        <div class="card">
+          <p style="font-size:14px;font-weight:500;margin:0 0 12px"><i class="ti ti-chart-bar" style="font-size:16px;vertical-align:-2px"></i> This week</p>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            ${Object.entries(state.kids).map(([kidId, k]) => renderDashboardKid(kidId, k, tIdx)).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderDashboardKid(kidId, k, tIdx) {
+      // Count this-week stats
+      const chores = k.chores || [];
+      let scheduledThisWeek = 0, doneThisWeek = 0, paidEarnedThisWeek = 0, longestStreak = 0;
+      chores.forEach(c => {
+        c.schedule.forEach((s, i) => {
+          if (!s) return;
+          // Only count up to today (don't count future days as "missed")
+          if (i > tIdx) return;
+          scheduledThisWeek++;
+          if (c.history[i] === 'done') {
+            doneThisWeek++;
+            if (c.paid) paidEarnedThisWeek += c.amount;
+          }
+        });
+        if ((c.streak || 0) > longestStreak) longestStreak = c.streak;
+      });
+      const pct = scheduledThisWeek ? Math.round(100 * doneThisWeek / scheduledThisWeek) : 0;
+      const target = k.age; // Barefoot age formula = $1 × age per week
+      const targetPct = Math.min(100, Math.round(100 * paidEarnedThisWeek / target));
+      const pendingForKid = state.pendingApprovals.filter(p => p.kid === kidId).length;
+
+      const hasPhoto = !!k.photoURL;
+      const dashAvatarStyle = hasPhoto
+        ? `background-image:url('${k.photoURL}')`
+        : `background:${k.textColor};color:white`;
+
+      const goal = k.goal || {};
+      const goalRow = goal.enabled && goal.target > 0
+        ? (() => {
+            const matched = (k.save || 0) * (goal.matchRatio || 1);
+            const total = (k.save || 0) + matched;
+            const goalPct = Math.min(100, Math.round(100 * total / goal.target));
+            return `
+              <div style="margin-top:8px;padding:8px;background:var(--bg-primary);border-radius:var(--radius-md)">
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <p style="font-size:11px;font-weight:500;margin:0"><i class="ti ti-target" style="font-size:11px;vertical-align:-1px"></i> ${goal.name}</p>
+                  <p style="font-size:11px;margin:0;color:var(--text-secondary)">${fmt(total)} / ${fmt(goal.target)}</p>
+                </div>
+                <div style="height:6px;background:var(--bg-secondary);border-radius:3px;overflow:hidden;margin-top:6px">
+                  <div style="height:100%;width:${goalPct}%;background:${k.textColor}"></div>
+                </div>
+                <p style="font-size:10px;color:var(--text-tertiary);margin:4px 0 0">incl. ${goal.matchRatio}:1 parent match (${fmt(matched)})</p>
+              </div>
+            `;
+          })()
+        : '';
+
+      return `
+        <div style="background:var(--bg-secondary);padding:12px;border-radius:var(--radius-md)">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <div style="width:40px;height:40px;border-radius:50%;background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;font-weight:500;${dashAvatarStyle}">${hasPhoto ? '' : k.avatar}</div>
+            <div style="flex:1">
+              <p style="font-size:14px;font-weight:500;margin:0">${k.name}</p>
+              <p style="font-size:11px;color:var(--text-secondary);margin:2px 0 0">Age ${k.age} · target ${fmt(target)}/wk</p>
+            </div>
+            ${pendingForKid ? `<div style="background:var(--warning-bg);color:var(--warning-text);padding:2px 8px;border-radius:8px;font-size:11px;font-weight:500">${pendingForKid} pending</div>` : ''}
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div style="padding:8px;background:var(--bg-primary);border-radius:var(--radius-md)">
+              <p style="font-size:10px;color:var(--text-secondary);margin:0;text-transform:uppercase;letter-spacing:0.5px">Chores</p>
+              <p style="font-size:16px;font-weight:500;margin:2px 0 0">${doneThisWeek}/${scheduledThisWeek}</p>
+              <div style="height:4px;background:var(--bg-secondary);border-radius:2px;overflow:hidden;margin-top:6px">
+                <div style="height:100%;width:${pct}%;background:${k.textColor}"></div>
+              </div>
+            </div>
+            <div style="padding:8px;background:var(--bg-primary);border-radius:var(--radius-md)">
+              <p style="font-size:10px;color:var(--text-secondary);margin:0;text-transform:uppercase;letter-spacing:0.5px">Earned</p>
+              <p style="font-size:16px;font-weight:500;margin:2px 0 0">${fmt(paidEarnedThisWeek)}</p>
+              <div style="height:4px;background:var(--bg-secondary);border-radius:2px;overflow:hidden;margin-top:6px">
+                <div style="height:100%;width:${targetPct}%;background:${k.textColor}"></div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;font-size:11px;color:var(--text-secondary)">
+            <span><i class="ti ti-flame" style="font-size:11px;vertical-align:-1px;color:#BA7517"></i> Best streak: ${longestStreak} days</span>
+            <span style="margin-left:auto;display:flex;gap:8px">
+              <span style="color:#185FA5">${fmt(k.spend || 0)}</span>
+              <span style="color:#0F6E56">${fmt(k.save || 0)}</span>
+              <span style="color:#993556">${fmt(k.give || 0)}</span>
+            </span>
+          </div>
+          ${goalRow}
         </div>
       `;
     }
@@ -1203,10 +1443,17 @@
         chore = state.kids[kidId].chores.find(c => c.id === choreId);
         if (!chore) return;
       } else {
-        chore = { title: '', amount: 0.5, icon: 'ti-circle-check',
+        chore = { title: '', amount: 0, icon: 'ti-circle-check',
           schedule: [true,true,true,true,true,true,true],
-          schoolReady: false, hardWork: false };
+          schoolReady: false, hardWork: false, paid: false, category: 'routines' };
       }
+      // Compute weekly target + currently allocated for this kid
+      const targetKidForCalc = state.kids[kidId];
+      const weeklyTarget = targetKidForCalc.age;
+      const currentlyAllocated = (targetKidForCalc.chores || [])
+        .filter(c => c.paid && c.id !== (isEdit ? choreId : null))
+        .reduce((sum, c) => sum + (c.amount * c.schedule.filter(Boolean).length), 0);
+
       const kidsOpts = Object.entries(state.kids).map(([id, k]) =>
         `<option value="${id}" ${id === kidId ? 'selected' : ''}>${k.name}</option>`).join('');
       const dayBtns = DAYS.map((d, i) =>
@@ -1224,11 +1471,20 @@
             </div>
             <div class="form-row">
               <label>Chore name</label>
-              <input type="text" id="m-chore-title" maxlength="40" value="${chore.title.replace(/"/g, '&quot;')}" placeholder="e.g. Feed the dog">
+              <input type="text" id="m-chore-title" maxlength="40" value="${chore.title.replace(/"/g, '&quot;')}" placeholder="e.g. Wash the car">
             </div>
             <div class="form-row">
-              <label>Amount ($)</label>
-              <input type="number" id="m-chore-amount" min="0" max="20" step="0.5" value="${chore.amount}">
+              <label>Type</label>
+              <div class="flag-toggle">
+                <button type="button" id="m-type-routine" class="${!chore.paid ? 'active' : ''}">🌟 Routine (unpaid)</button>
+                <button type="button" id="m-type-extra" class="${chore.paid ? 'active' : ''}">💼 Paid job</button>
+              </div>
+              <p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0">Barefoot: routines (brush teeth, make bed) are unpaid — they're being part of the family. Paid jobs are extras (wash car, weeding).</p>
+            </div>
+            <div class="form-row" id="m-amount-row" style="display:${chore.paid ? 'block' : 'none'}">
+              <label>Amount per day done ($)</label>
+              <input type="number" id="m-chore-amount" min="0" max="20" step="0.5" value="${chore.amount || 0.5}">
+              <p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0">💡 ${targetKidForCalc.name}'s weekly target is ${fmt(weeklyTarget)} (age formula). Already allocated ${fmt(currentlyAllocated)} across other paid jobs.</p>
             </div>
             <div class="form-row">
               <label>Days assigned</label>
@@ -1270,17 +1526,30 @@
       document.querySelectorAll('.modal-day').forEach(b => {
         b.onclick = () => b.classList.toggle('active');
       });
-      let flagSchool = chore.schoolReady, flagHard = chore.hardWork;
+      let flagSchool = chore.schoolReady || false;
+      let flagHard = chore.hardWork || false;
+      let isPaid = chore.paid || false;
       $('m-flag-school').onclick = () => { flagSchool = !flagSchool; $('m-flag-school').classList.toggle('active', flagSchool); };
       $('m-flag-hard').onclick   = () => { flagHard   = !flagHard;   $('m-flag-hard').classList.toggle('active', flagHard); };
+      $('m-type-routine').onclick = () => {
+        isPaid = false;
+        $('m-type-routine').classList.add('active');
+        $('m-type-extra').classList.remove('active');
+        $('m-amount-row').style.display = 'none';
+      };
+      $('m-type-extra').onclick = () => {
+        isPaid = true;
+        $('m-type-extra').classList.add('active');
+        $('m-type-routine').classList.remove('active');
+        $('m-amount-row').style.display = 'block';
+      };
 
       $('m-chore-save').onclick = () => {
         const title = $('m-chore-title').value.trim();
-        const amount = parseFloat($('m-chore-amount').value) || 0;
+        const amount = isPaid ? (parseFloat($('m-chore-amount').value) || 0) : 0;
         if (!title) return alert('Please enter a chore name');
         const days = Array.from(document.querySelectorAll('.modal-day')).map(b => b.classList.contains('active'));
         const targetKidId = isEdit ? kidId : $('m-chore-kid').value;
-        const tIdx = todayIdx();
 
         if (isEdit) {
           // Mutate in place; preserve history & streak
@@ -1288,20 +1557,22 @@
           if (!c) return;
           c.title = title;
           c.amount = amount;
+          c.paid = isPaid;
+          c.category = isPaid ? 'extras' : 'routines';
           c.icon = pickedIcon;
           c.schoolReady = flagSchool;
           c.hardWork = flagHard;
-          // If schedule changed, preserve done/pending statuses but update na cells
           c.schedule = days;
           c.history = c.history.map((h, i) => {
             if (!days[i]) return 'na';
-            // If was na before, set to available; otherwise keep status (done/pending/missed/available)
             return h === 'na' ? 'available' : h;
           });
         } else {
           const newChore = {
             id: 'c' + Date.now(),
             title, icon: pickedIcon, amount,
+            paid: isPaid,
+            category: isPaid ? 'extras' : 'routines',
             schoolReady: flagSchool, hardWork: flagHard,
             schedule: days,
             history: days.map(d => d ? 'available' : 'na'),
@@ -1360,6 +1631,26 @@
               </div>
               <p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0">Photo is auto-cropped square and resized to 256×256.</p>
             </div>
+            <div class="form-row">
+              <label>Savings goal (Barefoot Ladder) — optional</label>
+              <div class="flag-toggle">
+                <button type="button" id="m-goal-off" class="${!(k.goal && k.goal.enabled) ? 'active' : ''}">Off</button>
+                <button type="button" id="m-goal-on" class="${(k.goal && k.goal.enabled) ? 'active' : ''}">On</button>
+              </div>
+              <div id="m-goal-fields" style="display:${(k.goal && k.goal.enabled) ? 'block' : 'none'};margin-top:8px">
+                <input type="text" id="m-goal-name" maxlength="40" value="${(k.goal && k.goal.name || '').replace(/"/g, '&quot;')}" placeholder="e.g. LEGO Death Star" style="width:100%;padding:8px;border:0.5px solid var(--border);border-radius:var(--radius-md);font-size:13px;margin-bottom:6px">
+                <div style="display:flex;gap:6px">
+                  <input type="number" id="m-goal-target" min="10" max="2000" step="5" value="${k.goal && k.goal.target || 100}" placeholder="Target $" style="flex:2;padding:8px;border:0.5px solid var(--border);border-radius:var(--radius-md);font-size:13px">
+                  <select id="m-goal-match" style="flex:1;padding:8px;border:0.5px solid var(--border);border-radius:var(--radius-md);font-size:13px">
+                    <option value="0" ${(k.goal && k.goal.matchRatio) === 0 ? 'selected' : ''}>No match</option>
+                    <option value="0.5" ${(k.goal && k.goal.matchRatio) === 0.5 ? 'selected' : ''}>0.5:1 match</option>
+                    <option value="1" ${(k.goal && k.goal.matchRatio) === 1 ? 'selected' : ''}>1:1 match</option>
+                    <option value="2" ${(k.goal && k.goal.matchRatio) === 2 ? 'selected' : ''}>2:1 match</option>
+                  </select>
+                </div>
+              </div>
+              <p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0">When ON, ${k.name} sees a goal bar on their Save jar. Match means: for every $1 they save, parent adds $X when goal hits.</p>
+            </div>
             <div class="modal-actions">
               <button class="cancel" id="m-kid-cancel">Cancel</button>
               <button class="save" id="m-kid-save">Save changes</button>
@@ -1371,6 +1662,7 @@
       let pickedMode = k.mode;
       let pendingPhotoFile = null;
       let pendingPhotoRemove = false;
+      let goalEnabled = !!(k.goal && k.goal.enabled);
 
       $('kid-modal-backdrop').onclick = (e) => {
         if (e.target.id === 'kid-modal-backdrop') closeModal();
@@ -1384,6 +1676,19 @@
           pickedMode = b.dataset.mode;
         };
       });
+
+      $('m-goal-off').onclick = () => {
+        goalEnabled = false;
+        $('m-goal-off').classList.add('active');
+        $('m-goal-on').classList.remove('active');
+        $('m-goal-fields').style.display = 'none';
+      };
+      $('m-goal-on').onclick = () => {
+        goalEnabled = true;
+        $('m-goal-on').classList.add('active');
+        $('m-goal-off').classList.remove('active');
+        $('m-goal-fields').style.display = 'block';
+      };
 
       $('m-photo-input').onchange = async (e) => {
         const file = e.target.files[0];
@@ -1425,6 +1730,17 @@
           state.kids[kidId].age = age;
           state.kids[kidId].mode = pickedMode;
           state.kids[kidId].avatar = name.charAt(0).toUpperCase();
+          // Persist goal
+          if (goalEnabled) {
+            state.kids[kidId].goal = {
+              enabled: true,
+              name: ($('m-goal-name').value || '').trim() || 'Savings goal',
+              target: parseFloat($('m-goal-target').value) || 100,
+              matchRatio: parseFloat($('m-goal-match').value) || 0,
+            };
+          } else {
+            state.kids[kidId].goal = { enabled: false, name: '', target: 0, matchRatio: 1 };
+          }
 
           if (pendingPhotoFile) {
             saveBtn.textContent = 'Uploading photo…';
@@ -1534,6 +1850,42 @@
           const kid = state.kids[activeKid];
           const chore = kid.chores.find(c => c.id === choreId);
           if (!chore) return;
+          const cur = chore.history[dIdx];
+
+          // Untap pending — kid corrects accidental tap
+          if (cur === 'pending') {
+            chore.history[dIdx] = 'available';
+            // Remove matching pending approval
+            const apIdx = state.pendingApprovals.findIndex(p =>
+              p.kid === activeKid && p.choreId === choreId && p.dayIdx === dIdx
+            );
+            if (apIdx >= 0) state.pendingApprovals.splice(apIdx, 1);
+            scheduleSave();
+            render();
+            return;
+          }
+
+          if (cur !== 'available') return;
+
+          // Unpaid (routine) — auto-complete, no approval, no money
+          if (!chore.paid) {
+            chore.history[dIdx] = 'done';
+            let streak = 0;
+            for (let i = dIdx; i >= 0; i--) {
+              if (chore.history[i] === 'done') streak++;
+              else if (chore.history[i] === 'na') continue;
+              else break;
+            }
+            chore.streak = streak;
+            playMarioCoin();
+            const r = cell.getBoundingClientRect();
+            showBurst(r.left + r.width/2, r.top + r.height/2, kid.accentColor);
+            scheduleSave();
+            render();
+            return;
+          }
+
+          // Paid — go to pending for parent approval
           chore.history[dIdx] = 'pending';
           state.pendingApprovals.push({
             kid: activeKid, chore: chore.title, amount: chore.amount,
@@ -1564,9 +1916,18 @@
             }
             chore.streak = streak;
           }
-          kid.spend = (kid.spend || 0) + p.amount * 0.7;
-          kid.save  = (kid.save  || 0) + p.amount * 0.2;
-          kid.give  = (kid.give  || 0) + p.amount * 0.1;
+          // 70/20/10 split + log to histories
+          const today = new Date().toISOString().slice(0,10);
+          const spendAmt = p.amount * 0.7;
+          const saveAmt  = p.amount * 0.2;
+          const giveAmt  = p.amount * 0.1;
+          kid.spend = (kid.spend || 0) + spendAmt;
+          kid.save  = (kid.save  || 0) + saveAmt;
+          kid.give  = (kid.give  || 0) + giveAmt;
+          if (!kid.saveHistory) kid.saveHistory = [];
+          kid.saveHistory.push({ date: today, amount: saveAmt, type: 'in', note: p.chore });
+          if (!kid.giveHistory) kid.giveHistory = [];
+          kid.giveHistory.push({ date: today, amount: giveAmt, type: 'in', note: p.chore });
           state.pendingApprovals.splice(idx, 1);
           playApprovalChime();
           scheduleSave();
@@ -1664,6 +2025,161 @@
           render();
         };
       });
+
+      // Save transfer action
+      document.querySelectorAll('.save-transfer-btn').forEach(b => {
+        b.onclick = () => openSaveTransferModal(b.dataset.kid);
+      });
+
+      // Quarterly Give action
+      const giveBtn = $('give-quarterly-btn');
+      if (giveBtn) giveBtn.onclick = () => openGiveModal();
+
+      // Spend jar tap-through (kid view)
+      const spendJar = $('spend-jar-action');
+      if (spendJar) spendJar.onclick = () => openSpendModal(activeKid);
+    }
+
+    // ---------- Save transfer modal ----------
+    function openSaveTransferModal(kidId) {
+      const k = state.kids[kidId];
+      $('modal-root').innerHTML = `
+        <div class="modal-backdrop" id="save-modal-backdrop">
+          <div class="modal">
+            <h2>Transfer ${k.name}'s savings</h2>
+            <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px">
+              Move ${fmt(k.save)} from this app's Save jar to ${k.name}'s real high-interest bank account (e.g. ING, UBank, ME Bank).
+            </p>
+            <div class="form-row">
+              <label>Amount to transfer ($)</label>
+              <input type="number" id="m-save-amt" min="0" max="${k.save}" step="1" value="${Math.floor(k.save)}">
+            </div>
+            <div class="form-row">
+              <label>Note (optional)</label>
+              <input type="text" id="m-save-note" maxlength="40" placeholder="e.g. ING Orange Everyday">
+            </div>
+            <p style="font-size:12px;color:var(--text-secondary);margin:0 0 12px;line-height:1.4">
+              <i class="ti ti-info-circle" style="font-size:13px;vertical-align:-1px"></i> 
+              This logs the transfer in app history. <strong>You still need to do the actual bank transfer manually.</strong>
+            </p>
+            <div class="modal-actions">
+              <button class="cancel" id="m-save-cancel">Cancel</button>
+              <button class="save" id="m-save-confirm">I've transferred it</button>
+            </div>
+          </div>
+        </div>
+      `;
+      $('save-modal-backdrop').onclick = (e) => { if (e.target.id === 'save-modal-backdrop') closeModal(); };
+      $('m-save-cancel').onclick = closeModal;
+      $('m-save-confirm').onclick = () => {
+        const amt = parseFloat($('m-save-amt').value) || 0;
+        const note = ($('m-save-note').value || 'Bank transfer').trim();
+        if (amt <= 0 || amt > k.save) return alert('Enter a valid amount.');
+        const today = new Date().toISOString().slice(0,10);
+        k.save = Math.max(0, k.save - amt);
+        if (!k.saveHistory) k.saveHistory = [];
+        k.saveHistory.push({ date: today, amount: amt, type: 'out', note });
+        scheduleSave();
+        closeModal();
+        render();
+      };
+    }
+
+    // ---------- Quarterly Give modal ----------
+    function openGiveModal() {
+      const kidsArr = Object.entries(state.kids);
+      $('modal-root').innerHTML = `
+        <div class="modal-backdrop" id="give-modal-backdrop">
+          <div class="modal">
+            <h2>Time to give 🎁</h2>
+            <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px">
+              Pick a charity together with the boys. They learn most when they choose, and ideally hand over the money in person.
+            </p>
+            <div class="form-row">
+              <label>Charity / cause</label>
+              <input type="text" id="m-give-charity" maxlength="60" placeholder="e.g. The Smith Family, RSPCA, local food bank">
+            </div>
+            ${kidsArr.map(([id, k]) => `
+              <div style="padding:10px;background:var(--bg-secondary);border-radius:var(--radius-md);margin-bottom:6px">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <p style="font-size:13px;font-weight:500;margin:0">${k.name}'s Give jar</p>
+                  <p style="font-size:13px;margin:0;color:#993556;font-weight:500">${fmt(k.give || 0)}</p>
+                </div>
+                <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-top:6px">
+                  <input type="checkbox" class="m-give-check" data-kid="${id}" ${(k.give || 0) > 0 ? 'checked' : 'disabled'}>
+                  Give all of ${k.name}'s ${fmt(k.give || 0)}
+                </label>
+              </div>
+            `).join('')}
+            <div class="modal-actions">
+              <button class="cancel" id="m-give-cancel">Skip for now</button>
+              <button class="save" id="m-give-confirm">Mark donated</button>
+            </div>
+          </div>
+        </div>
+      `;
+      $('give-modal-backdrop').onclick = (e) => { if (e.target.id === 'give-modal-backdrop') closeModal(); };
+      $('m-give-cancel').onclick = closeModal;
+      $('m-give-confirm').onclick = () => {
+        const charity = ($('m-give-charity').value || '').trim();
+        if (!charity) return alert('Please enter the charity or cause.');
+        const today = new Date().toISOString().slice(0,10);
+        document.querySelectorAll('.m-give-check').forEach(cb => {
+          if (!cb.checked) return;
+          const kid = state.kids[cb.dataset.kid];
+          const amt = kid.give || 0;
+          if (amt <= 0) return;
+          kid.give = 0;
+          if (!kid.giveHistory) kid.giveHistory = [];
+          kid.giveHistory.push({ date: today, amount: amt, type: 'out', note: charity });
+        });
+        state.lastGiveQuarter = getCurrentQuarter();
+        scheduleSave();
+        closeModal();
+        render();
+      };
+    }
+
+    // ---------- Spend jar modal (kid records what they bought) ----------
+    function openSpendModal(kidId) {
+      const k = state.kids[kidId];
+      $('modal-root').innerHTML = `
+        <div class="modal-backdrop" id="spend-modal-backdrop">
+          <div class="modal">
+            <h2>${k.name}'s Spend jar</h2>
+            <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px">
+              Available: <strong style="color:#185FA5">${fmt(k.spend || 0)}</strong>
+            </p>
+            <div class="form-row">
+              <label>What did you buy?</label>
+              <input type="text" id="m-spend-item" maxlength="40" placeholder="e.g. Pokemon cards">
+            </div>
+            <div class="form-row">
+              <label>How much did it cost ($)</label>
+              <input type="number" id="m-spend-amt" min="0" max="${k.spend || 0}" step="0.5" value="${Math.min(5, k.spend || 0)}">
+            </div>
+            <div class="modal-actions">
+              <button class="cancel" id="m-spend-cancel">Cancel</button>
+              <button class="save" id="m-spend-confirm">Record purchase</button>
+            </div>
+          </div>
+        </div>
+      `;
+      $('spend-modal-backdrop').onclick = (e) => { if (e.target.id === 'spend-modal-backdrop') closeModal(); };
+      $('m-spend-cancel').onclick = closeModal;
+      $('m-spend-confirm').onclick = () => {
+        const item = ($('m-spend-item').value || '').trim();
+        const amt = parseFloat($('m-spend-amt').value) || 0;
+        if (!item) return alert('What did you buy?');
+        if (amt <= 0 || amt > (k.spend || 0)) return alert('Check the amount.');
+        const today = new Date().toISOString().slice(0,10);
+        k.spend = Math.max(0, (k.spend || 0) - amt);
+        if (!k.spendHistory) k.spendHistory = [];
+        k.spendHistory.push({ date: today, amount: amt, type: 'out', note: item });
+        scheduleSave();
+        closeModal();
+        render();
+      };
     }
 
     // ---------- Auth flow ----------
