@@ -508,16 +508,16 @@
     }
     .action-prompt:last-child { border-bottom: none; }
 
-    /* Flag toggle (schoolReady / hardWork) */
+    /* Flag toggle (schoolReady / hardWork / bonus values) */
     .flag-toggle {
       display: flex; gap: 6px; flex-wrap: wrap;
     }
-    .flag-toggle button {
+    .flag-toggle button, .bonus-value-btn {
       padding: 6px 12px; border: 0.5px solid var(--border);
       background: var(--bg-primary); border-radius: var(--radius-md);
       font-size: 12px;
     }
-    .flag-toggle button.active {
+    .flag-toggle button.active, .bonus-value-btn.active {
       background: var(--bg-tertiary); border-color: var(--text-primary);
       font-weight: 500;
     }
@@ -587,7 +587,7 @@
           name: 'Rafa', age: 4, avatar: 'R', mode: 'pre-reader',
           textColor: '#993C1D', bgColor: '#FAECE7', accentColor: '#D85A30',
           spend: 0, save: 0, give: 0,
-          spendHistory: [], saveHistory: [], giveHistory: [],
+          spendHistory: [], saveHistory: [], giveHistory: [], bonusHistory: [],
           goal: { enabled: false, name: '', target: 0, matchRatio: 1 },
           chores: [
             // Routines (unpaid — being part of the family)
@@ -622,7 +622,7 @@
           name: 'Diego', age: 8, avatar: 'D', mode: 'independent',
           textColor: '#0F6E56', bgColor: '#E1F5EE', accentColor: '#1D9E75',
           spend: 0, save: 0, give: 0,
-          spendHistory: [], saveHistory: [], giveHistory: [],
+          spendHistory: [], saveHistory: [], giveHistory: [], bonusHistory: [],
           goal: { enabled: false, name: '', target: 0, matchRatio: 1 },
           chores: [
             // Routines (unpaid)
@@ -651,6 +651,7 @@
       pendingApprovals: [],
       lastResetWeek: null,
       lastGiveQuarter: null,
+      familyValues: ['Courage', 'Curiosity', 'Honesty', 'Kindness', 'Resilience'],
     };
 
     // ---------- Icon palette for chore picker ----------
@@ -876,20 +877,22 @@
     }
 
     function migrateToV3() {
-      // Add paid, category, history arrays, goal — for any docs created before Batch 2
+      // Add paid, category, history arrays, goal, bonusHistory — for any docs created before Batch 2/3
       Object.values(state.kids).forEach(kid => {
         if (!kid.spendHistory) kid.spendHistory = [];
         if (!kid.saveHistory) kid.saveHistory = [];
         if (!kid.giveHistory) kid.giveHistory = [];
+        if (!kid.bonusHistory) kid.bonusHistory = [];
         if (!kid.goal) kid.goal = { enabled: false, name: '', target: 0, matchRatio: 1 };
         if (!kid.tapSize) kid.tapSize = (kid.mode === 'pre-reader' ? 'big' : 'standard');
         (kid.chores || []).forEach(c => {
-          if (c.paid === undefined) c.paid = (c.amount > 0); // existing chores with $ stay paid
+          if (c.paid === undefined) c.paid = (c.amount > 0);
           if (!c.category) c.category = c.paid ? 'extras' : 'routines';
-          if (!c.paid) c.amount = 0; // ensure unpaid have $0
+          if (!c.paid) c.amount = 0;
         });
       });
       if (!state.lastGiveQuarter) state.lastGiveQuarter = null;
+      if (!state.familyValues) state.familyValues = ['Courage', 'Curiosity', 'Honesty', 'Kindness', 'Resilience'];
     }
 
     function maybeWeeklyReset() {
@@ -1002,6 +1005,7 @@
     }
 
     function renderPicker() {
+      const tIdx = todayIdx();
       return `
         <div class="picker">
           <p class="picker-title">Who's tapping today?</p>
@@ -1011,11 +1015,40 @@
               const avatarStyle = hasPhoto
                 ? `background-image:url('${k.photoURL}')`
                 : `background:${k.textColor}`;
+              // Today's progress
+              const chores = k.chores || [];
+              let todayScheduled = 0, todayDone = 0;
+              chores.forEach(c => {
+                if (c.schedule[tIdx]) {
+                  todayScheduled++;
+                  if (c.history[tIdx] === 'done') todayDone++;
+                }
+              });
+              const pct = todayScheduled ? (todayDone / todayScheduled) : 0;
+              const allDone = todayScheduled > 0 && todayDone === todayScheduled;
+              // Longest streak today
+              const longestStreak = chores.reduce((a, c) => Math.max(a, c.streak || 0), 0);
+              // Ring math: 110px circle, radius 50, circumference 2*pi*50 ≈ 314.16
+              const C = 314.16;
+              const dashOffset = C * (1 - pct);
+              const ringColor = allDone ? '#0F6E56' : k.accentColor;
               return `
               <button class="kid-tile" data-kid="${id}" data-greeting="Hi ${k.name}!" style="background:${k.bgColor}">
-                <div class="kid-avatar ${hasPhoto ? 'has-photo' : ''}" style="${avatarStyle}">${hasPhoto ? '' : k.avatar}</div>
-                <p style="font-size:22px;font-weight:500;margin:0;color:${k.textColor}">${k.name}</p>
-                <p style="font-size:13px;margin:0;color:${k.textColor};opacity:0.75">Age ${k.age}</p>
+                <div class="kid-avatar-wrap" style="position:relative;display:inline-block">
+                  <svg width="120" height="120" style="display:block;transform:rotate(-90deg)" aria-hidden="true">
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="6"/>
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="${ringColor}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${dashOffset}" style="transition:stroke-dashoffset 0.5s ease"/>
+                  </svg>
+                  <div class="kid-avatar ${hasPhoto ? 'has-photo' : ''}" style="${avatarStyle};position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:90px;height:90px">${hasPhoto ? '' : k.avatar}</div>
+                  ${allDone ? `<div style="position:absolute;top:-2px;right:-2px;background:#0F6E56;color:white;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid ${k.bgColor}"><i class="ti ti-check" style="font-size:18px"></i></div>` : ''}
+                </div>
+                <p style="font-size:22px;font-weight:500;margin:8px 0 0;color:${k.textColor}">${k.name}</p>
+                <p style="font-size:13px;margin:2px 0 0;color:${k.textColor};opacity:0.85">
+                  ${todayScheduled === 0
+                    ? `Nothing today \u2014 enjoy!`
+                    : `${todayDone}/${todayScheduled} done today`}
+                  ${longestStreak >= 3 ? ` \u00b7 \ud83d\udd25 ${longestStreak}` : ''}
+                </p>
               </button>
             `;}).join('')}
           </div>
@@ -1253,6 +1286,7 @@
 
         ${renderActionPrompts()}
         ${renderDashboard(tIdx)}
+        ${renderFamilyValues()}
 
         <div class="card">
           <p style="font-size:14px;font-weight:500;margin:0 0 12px"><i class="ti ti-clock" style="font-size:16px;vertical-align:-2px;color:var(--warning-text)"></i> Pending approvals</p>
@@ -1429,9 +1463,190 @@
               <span style="color:#993556">${fmt(k.give || 0)}</span>
             </span>
           </div>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <button class="bonus-btn" data-kid="${kidId}" style="flex:1;border:0.5px solid var(--border);background:var(--bg-primary);padding:8px;border-radius:var(--radius-md);font-size:12px;font-weight:500"><i class="ti ti-sparkles" style="font-size:13px;vertical-align:-1px;color:#BA7517"></i> Bonus</button>
+            <button class="kid-detail-btn" data-kid="${kidId}" style="flex:1;border:0.5px solid var(--border);background:var(--bg-primary);padding:8px;border-radius:var(--radius-md);font-size:12px"><i class="ti ti-eye" style="font-size:13px;vertical-align:-1px"></i> View ${k.name}'s view</button>
+          </div>
           ${goalRow}
         </div>
       `;
+    }
+
+    // ---------- Family values ----------
+    function renderFamilyValues() {
+      const values = state.familyValues || [];
+      // Tally bonuses per value, per kid, last 90 days
+      const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90);
+      const cutoffISO = cutoff.toISOString().slice(0, 10);
+      const tallies = {}; // tallies[value][kidId] = count
+      values.forEach(v => { tallies[v] = {}; Object.keys(state.kids).forEach(kid => tallies[v][kid] = 0); });
+
+      Object.entries(state.kids).forEach(([kidId, k]) => {
+        (k.bonusHistory || []).forEach(b => {
+          if (b.date < cutoffISO) return;
+          if (b.value && tallies[b.value]) tallies[b.value][kidId] = (tallies[b.value][kidId] || 0) + 1;
+        });
+      });
+
+      return `
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <p style="font-size:14px;font-weight:500;margin:0"><i class="ti ti-sparkles" style="font-size:16px;vertical-align:-2px;color:#BA7517"></i> Family values</p>
+            <button id="edit-values-btn" style="border:0.5px solid var(--border);background:var(--bg-primary);padding:6px 10px;border-radius:var(--radius-md);font-size:12px"><i class="ti ti-edit" style="font-size:12px;vertical-align:-1px"></i> Edit</button>
+          </div>
+          <p style="font-size:11px;color:var(--text-secondary);margin:0 0 10px">Bonuses tagged with these values over the last 90 days. Tells you what your family stands for.</p>
+          ${values.length === 0
+            ? `<p style="font-size:13px;color:var(--text-secondary);margin:0;padding:1rem 0;text-align:center">No values defined yet. Tap Edit to add some.</p>`
+            : `<div style="display:flex;flex-direction:column;gap:6px">
+                ${values.map(v => {
+                  const totals = Object.entries(tallies[v] || {});
+                  const grand = totals.reduce((a, [, n]) => a + n, 0);
+                  return `
+                    <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+                      <p style="font-size:13px;font-weight:500;margin:0;flex:1">${v}</p>
+                      <div style="display:flex;gap:8px;font-size:11px;color:var(--text-secondary)">
+                        ${totals.map(([kidId, n]) => {
+                          const k = state.kids[kidId];
+                          if (!k) return '';
+                          return `<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:14px;height:14px;border-radius:50%;background:${k.textColor};color:white;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:500">${k.name[0]}</span> ${n}</span>`;
+                        }).join('')}
+                        <span style="color:var(--text-tertiary)">·</span>
+                        <span style="font-weight:500;color:var(--text-primary)">${grand} total</span>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>`
+          }
+        </div>
+      `;
+    }
+
+    // ---------- Bonus modal ----------
+    function openBonusModal(kidId) {
+      const k = state.kids[kidId];
+      const values = state.familyValues || [];
+      $('modal-root').innerHTML = `
+        <div class="modal-backdrop" id="bonus-modal-backdrop">
+          <div class="modal">
+            <h2><i class="ti ti-sparkles" style="font-size:18px;vertical-align:-2px;color:#BA7517"></i> Award ${k.name} a bonus</h2>
+            <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px">Reward great behaviour, courage, kindness, or anything that makes you proud. Goes through the 70/20/10 split like a paid chore.</p>
+            <div class="form-row">
+              <label>Amount ($)</label>
+              <input type="number" id="m-bonus-amt" min="0.5" max="20" step="0.5" value="2">
+            </div>
+            <div class="form-row">
+              <label>What did ${k.name} do?</label>
+              <input type="text" id="m-bonus-reason" maxlength="80" placeholder="e.g. Helped his brother without being asked">
+            </div>
+            <div class="form-row">
+              <label>Tag a value (optional)</label>
+              <div class="flag-toggle" id="m-bonus-values" style="flex-wrap:wrap">
+                ${values.map(v => `<button type="button" class="bonus-value-btn" data-value="${v.replace(/"/g, '&quot;')}">${v}</button>`).join('')}
+              </div>
+              ${values.length === 0 ? `<p style="font-size:11px;color:var(--text-tertiary);margin:6px 0 0">No values yet \u2014 tap Edit on Family values card to add.</p>` : ''}
+            </div>
+            <div class="modal-actions">
+              <button class="cancel" id="m-bonus-cancel">Cancel</button>
+              <button class="save" id="m-bonus-save">Award bonus</button>
+            </div>
+          </div>
+        </div>
+      `;
+      $('bonus-modal-backdrop').onclick = (e) => { if (e.target.id === 'bonus-modal-backdrop') closeModal(); };
+      $('m-bonus-cancel').onclick = closeModal;
+      let pickedValue = null;
+      document.querySelectorAll('.bonus-value-btn').forEach(b => {
+        b.onclick = () => {
+          const wasActive = b.classList.contains('active');
+          document.querySelectorAll('.bonus-value-btn').forEach(x => x.classList.remove('active'));
+          if (!wasActive) {
+            b.classList.add('active');
+            pickedValue = b.dataset.value;
+          } else {
+            pickedValue = null;
+          }
+        };
+      });
+      $('m-bonus-save').onclick = () => {
+        const amt = parseFloat($('m-bonus-amt').value) || 0;
+        const reason = ($('m-bonus-reason').value || '').trim();
+        if (amt <= 0) return alert('Enter an amount.');
+        if (!reason) return alert('What did ' + k.name + ' do? Please add a short note.');
+        const today = new Date().toISOString().slice(0,10);
+        // Apply 70/20/10 split (same as paid chore approval)
+        k.spend = (k.spend || 0) + amt * 0.7;
+        k.save  = (k.save  || 0) + amt * 0.2;
+        k.give  = (k.give  || 0) + amt * 0.1;
+        if (!k.bonusHistory) k.bonusHistory = [];
+        k.bonusHistory.push({ date: today, amount: amt, reason, value: pickedValue || null });
+        if (!k.saveHistory) k.saveHistory = [];
+        k.saveHistory.push({ date: today, amount: amt * 0.2, type: 'in', note: 'Bonus: ' + reason });
+        if (!k.giveHistory) k.giveHistory = [];
+        k.giveHistory.push({ date: today, amount: amt * 0.1, type: 'in', note: 'Bonus: ' + reason });
+        playApprovalChime();
+        scheduleSave();
+        closeModal();
+        render();
+      };
+    }
+
+    // ---------- Family values edit modal ----------
+    function openValuesEditModal() {
+      const values = [...(state.familyValues || [])];
+      const renderList = () => values.map((v, i) => `
+        <div style="display:flex;align-items:center;gap:6px;padding:6px;background:var(--bg-secondary);border-radius:var(--radius-md);margin-bottom:4px">
+          <p style="flex:1;font-size:13px;margin:0">${v}</p>
+          <button type="button" class="value-remove-btn" data-idx="${i}" style="border:none;background:transparent;color:var(--danger-text);padding:4px"><i class="ti ti-trash" style="font-size:14px"></i></button>
+        </div>
+      `).join('');
+      $('modal-root').innerHTML = `
+        <div class="modal-backdrop" id="values-modal-backdrop">
+          <div class="modal">
+            <h2>Family values</h2>
+            <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px">Define what your family stands for. Tag bonuses with these to build a record over time.</p>
+            <div id="values-list-wrap">${renderList()}</div>
+            <div style="display:flex;gap:6px;margin-top:8px">
+              <input type="text" id="m-value-new" maxlength="20" placeholder="Add a value (e.g. Resilience)" style="flex:1;padding:8px;border:0.5px solid var(--border);border-radius:var(--radius-md);font-size:13px">
+              <button type="button" id="m-value-add" style="background:#0F6E56;color:white;border:none;padding:8px 14px;border-radius:var(--radius-md);font-size:13px;font-weight:500">Add</button>
+            </div>
+            <div class="modal-actions">
+              <button class="cancel" id="m-values-cancel">Cancel</button>
+              <button class="save" id="m-values-save">Save</button>
+            </div>
+          </div>
+        </div>
+      `;
+      $('values-modal-backdrop').onclick = (e) => { if (e.target.id === 'values-modal-backdrop') closeModal(); };
+      $('m-values-cancel').onclick = closeModal;
+
+      const refreshList = () => {
+        $('values-list-wrap').innerHTML = renderList();
+        document.querySelectorAll('.value-remove-btn').forEach(b => {
+          b.onclick = () => {
+            values.splice(parseInt(b.dataset.idx), 1);
+            refreshList();
+          };
+        });
+      };
+      refreshList();
+
+      $('m-value-add').onclick = () => {
+        const v = ($('m-value-new').value || '').trim();
+        if (!v) return;
+        if (values.length >= 10) return alert('Limit 10 values.');
+        if (values.some(x => x.toLowerCase() === v.toLowerCase())) return alert('Already in the list.');
+        values.push(v);
+        $('m-value-new').value = '';
+        refreshList();
+      };
+
+      $('m-values-save').onclick = () => {
+        state.familyValues = values;
+        scheduleSave();
+        closeModal();
+        render();
+      };
     }
 
     function renderChoreManagement() {
@@ -2110,6 +2325,24 @@
       // Spend jar tap-through (kid view)
       const spendJar = $('spend-jar-action');
       if (spendJar) spendJar.onclick = () => openSpendModal(activeKid);
+
+      // Bonus button (per kid on dashboard)
+      document.querySelectorAll('.bonus-btn').forEach(b => {
+        b.onclick = () => openBonusModal(b.dataset.kid);
+      });
+
+      // View kid's view from dashboard
+      document.querySelectorAll('.kid-detail-btn').forEach(b => {
+        b.onclick = () => {
+          activeKid = b.dataset.kid;
+          view = 'kid';
+          render();
+        };
+      });
+
+      // Edit family values
+      const editValues = $('edit-values-btn');
+      if (editValues) editValues.onclick = () => openValuesEditModal();
     }
 
     // ---------- Save transfer modal ----------
