@@ -44,7 +44,7 @@
       line-height: 1.5;
       overscroll-behavior: none;
     }
-    body { min-height: 100vh; min-height: 100dvh; zoom: var(--app-zoom); }
+    body { min-height: 100vh; min-height: 100dvh; }
     #app {
       max-width: 900px;
       margin: 0 auto;
@@ -1268,9 +1268,8 @@
       return localStorage.getItem('text-scale') || 'standard';
     }
     function applyTextScale(scale) {
-      const map = { compact: 0.9, standard: 1.0, large: 1.15 };
-      const z = map[scale] || 1.0;
-      document.documentElement.style.setProperty('--app-zoom', z);
+      // No-op for now — text scale temporarily disabled while we sort browser-compat issues.
+      // Will revisit with a proper REM-based approach.
       localStorage.setItem('text-scale', scale);
     }
 
@@ -2207,3 +2206,112 @@
         const charity = ($('m-give-charity').value || '').trim();
         if (!charity) return alert('Please enter the charity or cause.');
         const today = new Date().toISOString().slice(0,10);
+        document.querySelectorAll('.m-give-check').forEach(cb => {
+          if (!cb.checked) return;
+          const kid = state.kids[cb.dataset.kid];
+          const amt = kid.give || 0;
+          if (amt <= 0) return;
+          kid.give = 0;
+          if (!kid.giveHistory) kid.giveHistory = [];
+          kid.giveHistory.push({ date: today, amount: amt, type: 'out', note: charity });
+        });
+        state.lastGiveQuarter = getCurrentQuarter();
+        scheduleSave();
+        closeModal();
+        render();
+      };
+    }
+
+    // ---------- Spend jar modal (kid records what they bought) ----------
+    function openSpendModal(kidId) {
+      const k = state.kids[kidId];
+      $('modal-root').innerHTML = `
+        <div class="modal-backdrop" id="spend-modal-backdrop">
+          <div class="modal">
+            <h2>${k.name}'s Spend jar</h2>
+            <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px">
+              Available: <strong style="color:#185FA5">${fmt(k.spend || 0)}</strong>
+            </p>
+            <div class="form-row">
+              <label>What did you buy?</label>
+              <input type="text" id="m-spend-item" maxlength="40" placeholder="e.g. Pokemon cards">
+            </div>
+            <div class="form-row">
+              <label>How much did it cost ($)</label>
+              <input type="number" id="m-spend-amt" min="0" max="${k.spend || 0}" step="0.5" value="${Math.min(5, k.spend || 0)}">
+            </div>
+            <div class="modal-actions">
+              <button class="cancel" id="m-spend-cancel">Cancel</button>
+              <button class="save" id="m-spend-confirm">Record purchase</button>
+            </div>
+          </div>
+        </div>
+      `;
+      $('spend-modal-backdrop').onclick = (e) => { if (e.target.id === 'spend-modal-backdrop') closeModal(); };
+      $('m-spend-cancel').onclick = closeModal;
+      $('m-spend-confirm').onclick = () => {
+        const item = ($('m-spend-item').value || '').trim();
+        const amt = parseFloat($('m-spend-amt').value) || 0;
+        if (!item) return alert('What did you buy?');
+        if (amt <= 0 || amt > (k.spend || 0)) return alert('Check the amount.');
+        const today = new Date().toISOString().slice(0,10);
+        k.spend = Math.max(0, (k.spend || 0) - amt);
+        if (!k.spendHistory) k.spendHistory = [];
+        k.spendHistory.push({ date: today, amount: amt, type: 'out', note: item });
+        scheduleSave();
+        closeModal();
+        render();
+      };
+    }
+
+    // ---------- Auth flow ----------
+    // Apply saved text scale on boot (before any render)
+    applyTextScale(getTextScale());
+
+    onAuthStateChanged(auth, async (user) => {
+      $('loading').style.display = 'none';
+      if (user) {
+        $('login-screen').style.display = 'none';
+        $('app').style.display = 'block';
+        await loadState(user);
+        startListening();
+        render();
+      } else {
+        $('login-screen').style.display = 'flex';
+        $('app').style.display = 'none';
+        if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+      }
+    });
+
+    $('signin-btn').onclick = async () => {
+      ensureAudio(); // Triggers TTS warmup early
+      const email = $('email').value.trim();
+      const password = $('password').value;
+      const errEl = $('login-error');
+      errEl.textContent = '';
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (e) {
+        errEl.textContent = e.code === 'auth/invalid-credential' ? 'Wrong email or password.' : (e.message || 'Sign in failed.');
+      }
+    };
+    $('password').onkeydown = (e) => { if (e.key === 'Enter') $('signin-btn').click(); };
+
+    // Online/offline indicator
+    function setConn() {
+      isOnline = navigator.onLine;
+      $('conn-status').classList.toggle('offline', !isOnline);
+    }
+    window.addEventListener('online', setConn);
+    window.addEventListener('offline', setConn);
+    setConn();
+
+    // Service worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js').catch(console.warn);
+      });
+    }
+  </script>
+</body>
+</html>
