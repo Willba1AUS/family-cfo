@@ -519,12 +519,10 @@
 
     /* Value pills (kid view) */
     .value-pill {
+      cursor: pointer;
       transition: transform 0.15s;
     }
     .value-pill:active { transform: scale(0.95); }
-    .value-pill-pre {
-      cursor: pointer;
-    }
 
     /* Bonus celebration animations */
     @keyframes fadeIn {
@@ -912,24 +910,48 @@
       if (!chosenVoice) {
         const list = loadAllVoices();
         chosenVoice = list[0] || null;
-        // restore saved voice from localStorage
         const savedName = localStorage.getItem('voice-name');
         if (savedName) {
           const v = list.find(v => v.name === savedName);
           if (v) chosenVoice = v;
         }
       }
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      if (chosenVoice) { u.voice = chosenVoice; u.lang = chosenVoice.lang; }
-      else u.lang = 'en-AU';
-      u.rate = 0.95; u.pitch = 1.0; u.volume = 1;
-      if (btnEl) {
-        btnEl.classList.add('speaking');
-        u.onend = () => btnEl.classList.remove('speaking');
-        u.onerror = () => btnEl.classList.remove('speaking');
-      }
-      window.speechSynthesis.speak(u);
+
+      const synth = window.speechSynthesis;
+
+      // Anti-cutoff: Chrome/Android sometimes goes "paused" after idle. Resume.
+      try { synth.resume(); } catch (e) {}
+
+      // Cancel any in-flight speech, then wait briefly so the cancel actually settles
+      // before we queue the new utterance. Without this delay, Android Chrome
+      // often eats the new utterance entirely or cuts it off mid-word.
+      synth.cancel();
+
+      setTimeout(() => {
+        try { synth.resume(); } catch (e) {}
+        const u = new SpeechSynthesisUtterance(text);
+        if (chosenVoice) { u.voice = chosenVoice; u.lang = chosenVoice.lang; }
+        else u.lang = 'en-AU';
+        u.rate = 0.9;     // slightly slower = less likely to be truncated
+        u.pitch = 1.0;
+        u.volume = 1;
+        if (btnEl) {
+          btnEl.classList.add('speaking');
+          u.onend = () => btnEl.classList.remove('speaking');
+          u.onerror = () => btnEl.classList.remove('speaking');
+        }
+        // Heartbeat: Chrome bug where speech pauses after ~14s. We send pause/resume
+        // pulses every 10s as long as speech is active.
+        const heartbeat = setInterval(() => {
+          if (!synth.speaking) { clearInterval(heartbeat); return; }
+          try { synth.pause(); synth.resume(); } catch (e) {}
+        }, 10000);
+        const cleanup = () => clearInterval(heartbeat);
+        u.addEventListener('end', cleanup);
+        u.addEventListener('error', cleanup);
+
+        synth.speak(u);
+      }, 80);
     }
 
     if ('speechSynthesis' in window) {
@@ -2477,8 +2499,8 @@
       document.querySelectorAll('.kid-tile').forEach(b => {
         b.onclick = () => {
           ensureAudio();
-          // Small delay lets TTS engine finish warmup before real utterance
-          setTimeout(() => speak(b.dataset.greeting), 150);
+          // 250ms delay lets TTS engine warm + cancel-from-prev-utterance settle
+          setTimeout(() => speak(b.dataset.greeting), 250);
           activeKid = b.dataset.kid;
           view = 'kid';
           render();
@@ -2495,8 +2517,8 @@
         };
       });
 
-      // Value pills — pre-reader gets TTS playback
-      document.querySelectorAll('.value-pill-pre').forEach(b => {
+      // Value pills — all kids get TTS playback on tap
+      document.querySelectorAll('.value-pill').forEach(b => {
         b.onclick = () => {
           ensureAudio();
           speak(b.dataset.valueName);
