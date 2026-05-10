@@ -1,20 +1,10 @@
 // Service worker for Family CFO PWA
-// Handles offline support and asset caching
-const CACHE_NAME = 'family-cfo-v3.1';
-const ASSETS = [
-  './',
-  './index.html',
-  './manifest.json',
-  './app-icon-192.png',
-  './app-icon-512.png',
-  'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css'
-];
+// Network-first for HTML (always fresh), cache-first for static assets
+const CACHE_NAME = 'family-cfo-v4';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
-      .then(() => self.skipWaiting())
-  );
+  // Skip pre-caching — we cache as we go to avoid blocking install
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -26,31 +16,62 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Don't cache Firebase API calls — let them go to network or fail naturally
-  if (event.request.url.includes('firestore.googleapis.com') ||
-      event.request.url.includes('firebaseio.com') ||
-      event.request.url.includes('googleapis.com/identitytoolkit') ||
-      event.request.url.includes('firebasestorage.googleapis.com') ||
-      event.request.url.includes('firebasestorage.app')) {
+  const url = event.request.url;
+
+  // Pass-through for Firebase APIs
+  if (url.includes('firestore.googleapis.com') ||
+      url.includes('firebaseio.com') ||
+      url.includes('googleapis.com/identitytoolkit') ||
+      url.includes('firebasestorage.googleapis.com') ||
+      url.includes('firebasestorage.app') ||
+      url.includes('firebaseapp.com')) {
     return;
   }
 
+  if (event.request.method !== 'GET') return;
+
+  const isHTML = event.request.mode === 'navigate' ||
+                 (event.request.headers.get('Accept') || '').includes('text/html') ||
+                 url.endsWith('/') || url.endsWith('.html');
+
+  if (isHTML) {
+    // Network-first
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request).then(c => c || new Response('Offline', { status: 503 })))
+    );
+    return;
+  }
+
+  // Cache-first with background refresh for static assets
   event.respondWith(
     caches.match(event.request).then((cached) => {
-      if (cached) return cached;
+      if (cached) {
+        fetch(event.request).then(r => {
+          if (r && r.status === 200) {
+            caches.open(CACHE_NAME).then(c => c.put(event.request, r.clone()));
+          }
+        }).catch(() => {});
+        return cached;
+      }
       return fetch(event.request).then((response) => {
-        // Cache successful GET responses for same-origin or known CDNs
-        if (response && response.status === 200 && event.request.method === 'GET') {
-          const url = event.request.url;
-          if (url.startsWith(self.location.origin) ||
-              url.includes('jsdelivr.net') ||
-              url.includes('gstatic.com')) {
-            const respClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, respClone));
+        if (response && response.status === 200) {
+          const same = url.startsWith(self.location.origin);
+          const cdn = url.includes('jsdelivr.net') || url.includes('gstatic.com');
+          if (same || cdn) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
           }
         }
         return response;
-      }).catch(() => cached || new Response('', { status: 503 }));
+      }).catch(() => new Response('', { status: 503 }));
     })
   );
-})
+});
