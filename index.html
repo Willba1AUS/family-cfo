@@ -234,23 +234,48 @@
     .day-cell.tickable { cursor: pointer; }
     .day-cell.tickable:active { transform: scale(0.92); }
 
-    /* Tap-size variants for kid view: applied to .chore-grid wrapper */
+    /* Tap-size variants: scale ENTIRE chore row, not just the day cell */
+    /* Big */
     .chore-grid.tap-big .grid-header,
     .chore-grid.tap-big .chore-row {
       grid-template-columns: 1fr repeat(7, 48px);
     }
+    .chore-grid.tap-big .chore-row { padding: 14px 10px; }
+    .chore-grid.tap-big .chore-icon-circle { width: 44px !important; height: 44px !important; }
+    .chore-grid.tap-big .chore-icon-circle .ti { font-size: 22px !important; }
+    .chore-grid.tap-big .chore-title { font-size: 15px !important; }
     .chore-grid.tap-big .day-cell { width: 40px; height: 40px; border-radius: 8px; }
     .chore-grid.tap-big .day-cell .ti { font-size: 20px !important; }
     .chore-grid.tap-big .day-cell span { font-size: 22px !important; }
+    .chore-grid.tap-big .grid-header-day { font-size: 13px; }
 
+    /* Extra big */
     .chore-grid.tap-extra-big .grid-header,
     .chore-grid.tap-extra-big .chore-row {
       grid-template-columns: 1fr repeat(7, 60px);
     }
+    .chore-grid.tap-extra-big .chore-row { padding: 18px 12px; }
+    .chore-grid.tap-extra-big .chore-icon-circle { width: 56px !important; height: 56px !important; }
+    .chore-grid.tap-extra-big .chore-icon-circle .ti { font-size: 28px !important; }
+    .chore-grid.tap-extra-big .chore-title { font-size: 17px !important; }
     .chore-grid.tap-extra-big .day-cell { width: 52px; height: 52px; border-radius: 10px; }
     .chore-grid.tap-extra-big .day-cell .ti { font-size: 26px !important; }
     .chore-grid.tap-extra-big .day-cell span { font-size: 28px !important; }
-    .chore-grid.tap-extra-big .chore-row { padding: 16px 12px; }
+    .chore-grid.tap-extra-big .grid-header-day { font-size: 14px; }
+
+    /* Huge */
+    .chore-grid.tap-huge .grid-header,
+    .chore-grid.tap-huge .chore-row {
+      grid-template-columns: 1fr repeat(7, 76px);
+    }
+    .chore-grid.tap-huge .chore-row { padding: 22px 14px; }
+    .chore-grid.tap-huge .chore-icon-circle { width: 68px !important; height: 68px !important; }
+    .chore-grid.tap-huge .chore-icon-circle .ti { font-size: 36px !important; }
+    .chore-grid.tap-huge .chore-title { font-size: 19px !important; }
+    .chore-grid.tap-huge .day-cell { width: 68px; height: 68px; border-radius: 12px; }
+    .chore-grid.tap-huge .day-cell .ti { font-size: 34px !important; }
+    .chore-grid.tap-huge .day-cell span { font-size: 36px !important; }
+    .chore-grid.tap-huge .grid-header-day { font-size: 16px; }
 
     /* Cards */
     .card {
@@ -1090,7 +1115,10 @@
       const extras = chores.filter(c => c.paid);
       // Effective tap size: explicit override wins, else pre-reader → big, else standard
       const tapSize = k.tapSize || (isPre ? 'big' : 'standard');
-      const tapClass = tapSize === 'big' ? 'tap-big' : tapSize === 'extra-big' ? 'tap-extra-big' : '';
+      const tapClass = tapSize === 'big' ? 'tap-big'
+                     : tapSize === 'extra-big' ? 'tap-extra-big'
+                     : tapSize === 'huge' ? 'tap-huge'
+                     : '';
       const sectionHeader = (label, sub) => `
         <div style="display:flex;align-items:baseline;gap:8px;padding:10px 0 4px;border-top:0.5px solid var(--border);margin-top:8px">
           <p style="font-size:12px;font-weight:500;margin:0;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px">${label}</p>
@@ -1675,7 +1703,8 @@
               <div class="mode-toggle">
                 <button type="button" class="mode-toggle-btn tap-size-btn ${(k.tapSize || 'standard') === 'standard' ? 'active' : ''}" data-size="standard">Standard</button>
                 <button type="button" class="mode-toggle-btn tap-size-btn ${k.tapSize === 'big' ? 'active' : ''}" data-size="big">Big</button>
-                <button type="button" class="mode-toggle-btn tap-size-btn ${k.tapSize === 'extra-big' ? 'active' : ''}" data-size="extra-big">Extra big</button>
+                <button type="button" class="mode-toggle-btn tap-size-btn ${k.tapSize === 'extra-big' ? 'active' : ''}" data-size="extra-big">XL</button>
+                <button type="button" class="mode-toggle-btn tap-size-btn ${k.tapSize === 'huge' ? 'active' : ''}" data-size="huge">Huge</button>
               </div>
               <p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0">Bigger tap targets help young fingers. Pre-reader mode auto-uses Big unless you override here.</p>
             </div>
