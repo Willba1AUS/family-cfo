@@ -1,6 +1,6 @@
 // Service worker for Family CFO PWA
 // Network-first for HTML (always fresh), cache-first for static assets
-const CACHE_NAME = 'family-cfo-v6.1';
+const CACHE_NAME = 'family-cfo-v7';
 
 self.addEventListener('install', (event) => {
   // Skip pre-caching — we cache as we go to avoid blocking install
