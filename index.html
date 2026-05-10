@@ -109,6 +109,15 @@
     }
 
     /* Kid picker */
+    /* Family dashboard on picker */
+    .family-dashboard {
+      background: var(--bg-primary);
+      border-radius: var(--radius-xl);
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+      border: 0.5px solid var(--border);
+    }
+
     .picker {
       background: var(--bg-secondary);
       border-radius: var(--radius-xl); padding: 2.5rem 2rem;
@@ -508,6 +517,34 @@
     }
     .action-prompt:last-child { border-bottom: none; }
 
+    /* Value pills (kid view) */
+    .value-pill {
+      transition: transform 0.15s;
+    }
+    .value-pill:active { transform: scale(0.95); }
+    .value-pill-pre {
+      cursor: pointer;
+    }
+
+    /* Bonus celebration animations */
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes popIn {
+      0% { opacity: 0; transform: scale(0.5); }
+      60% { opacity: 1; transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-15px); }
+      60% { transform: translateY(0); }
+    }
+    .celebrate-modal {
+      box-shadow: 0 12px 48px rgba(0,0,0,0.3);
+    }
+
     /* Flag toggle (schoolReady / hardWork / bonus values) */
     .flag-toggle {
       display: flex; gap: 6px; flex-wrap: wrap;
@@ -651,8 +688,44 @@
       pendingApprovals: [],
       lastResetWeek: null,
       lastGiveQuarter: null,
-      familyValues: ['Courage', 'Curiosity', 'Honesty', 'Kindness', 'Resilience'],
+      familyValues: [
+        { name: 'Courage', emoji: '🦁' },
+        { name: 'Curiosity', emoji: '🔍' },
+        { name: 'Honesty', emoji: '🤝' },
+        { name: 'Kindness', emoji: '❤️' },
+        { name: 'Resilience', emoji: '💪' },
+      ],
     };
+
+    // Auto-suggest emoji for common value names
+    const VALUE_EMOJI_SUGGESTIONS = {
+      'courage': '🦁', 'brave': '🦁', 'bravery': '🦁',
+      'curiosity': '🔍', 'curious': '🔍',
+      'honesty': '🤝', 'honest': '🤝', 'truth': '🤝',
+      'kindness': '❤️', 'kind': '❤️', 'compassion': '❤️',
+      'resilience': '💪', 'resilient': '💪', 'grit': '💪',
+      'hard work': '🛠️', 'hardwork': '🛠️', 'effort': '🛠️',
+      'respect': '🙏', 'respectful': '🙏',
+      'patience': '⏳', 'patient': '⏳',
+      'creativity': '🎨', 'creative': '🎨',
+      'gratitude': '🙏', 'grateful': '🙏',
+      'humility': '🌱', 'humble': '🌱',
+      'generosity': '🎁', 'generous': '🎁', 'giving': '🎁',
+      'fairness': '⚖️', 'fair': '⚖️',
+      'integrity': '⭐', 'character': '⭐',
+      'responsibility': '🎯', 'responsible': '🎯',
+      'teamwork': '🤝', 'collaboration': '🤝',
+      'wisdom': '🦉', 'wise': '🦉',
+      'love': '💕', 'family': '👨\u200d👩\u200d👦\u200d👦',
+      'joy': '😊', 'happy': '😊', 'happiness': '😊',
+      'focus': '🎯', 'discipline': '🎯',
+      'curious': '🔍', 'learning': '📚', 'curious mind': '🔍',
+    };
+
+    function suggestEmoji(name) {
+      const k = (name || '').trim().toLowerCase();
+      return VALUE_EMOJI_SUGGESTIONS[k] || '⭐';
+    }
 
     // ---------- Icon palette for chore picker ----------
     const ICON_PALETTE = [
@@ -785,6 +858,25 @@
       });
     }
 
+    // Bigger, celebratory sound for bonus awards
+    function playBonusFanfare() {
+      const ctx = ensureAudio(); if (!ctx || !soundOn) return;
+      // Ascending arpeggio: C5, E5, G5, C6, E6 — feels triumphant
+      const notes = [[523, 0, 0.12], [659, 0.10, 0.12], [784, 0.20, 0.12], [1047, 0.30, 0.18], [1319, 0.42, 0.30]];
+      notes.forEach(([f, w, d]) => {
+        const t0 = ctx.currentTime + w;
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(f, t0);
+        g.gain.setValueAtTime(0, t0);
+        g.gain.linearRampToValueAtTime(0.18, t0 + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(t0); osc.stop(t0 + d + 0.05);
+      });
+    }
+
     // ---------- TTS ----------
     function rankVoice(v) {
       const name = v.name.toLowerCase();
@@ -892,7 +984,22 @@
         });
       });
       if (!state.lastGiveQuarter) state.lastGiveQuarter = null;
-      if (!state.familyValues) state.familyValues = ['Courage', 'Curiosity', 'Honesty', 'Kindness', 'Resilience'];
+      // Migrate familyValues from string[] to {name, emoji}[]
+      if (!state.familyValues) {
+        state.familyValues = [
+          { name: 'Courage', emoji: '🦁' },
+          { name: 'Curiosity', emoji: '🔍' },
+          { name: 'Honesty', emoji: '🤝' },
+          { name: 'Kindness', emoji: '❤️' },
+          { name: 'Resilience', emoji: '💪' },
+        ];
+      } else if (state.familyValues.length > 0 && typeof state.familyValues[0] === 'string') {
+        // Old format: array of strings → upgrade to objects with auto-suggested emoji
+        state.familyValues = state.familyValues.map(name => ({
+          name,
+          emoji: suggestEmoji(name)
+        }));
+      }
     }
 
     function maybeWeeklyReset() {
@@ -1002,11 +1109,62 @@
       if (view === 'kid' && activeKid && state.kids[activeKid].mode === 'pre-reader') {
         renderVoicePicker();
       }
+      // Check for unviewed bonuses when kid enters their view
+      if (view === 'kid' && activeKid) {
+        const k = state.kids[activeKid];
+        const unviewed = (k.bonusHistory || []).filter(b => b.unviewed);
+        if (unviewed.length > 0) {
+          showBonusCelebration(k, unviewed);
+        }
+      }
+    }
+
+    function showBonusCelebration(kid, unviewedBonuses) {
+      // Take the most recent unviewed bonus to highlight, mark all as viewed
+      const latest = unviewedBonuses[unviewedBonuses.length - 1];
+      const isPre = kid.mode === 'pre-reader';
+      const others = unviewedBonuses.length - 1;
+
+      $('modal-root').innerHTML = `
+        <div class="modal-backdrop" id="celebrate-backdrop" style="background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);animation:fadeIn 0.3s ease">
+          <div class="modal celebrate-modal" style="max-width:420px;text-align:center;padding:2rem 1.5rem;background:${kid.bgColor};animation:popIn 0.4s ease">
+            <div style="font-size:80px;line-height:1;margin-bottom:8px;animation:bounce 0.6s ease 0.2s">${latest.emoji || '⭐'}</div>
+            <p style="font-size:14px;font-weight:500;margin:0;color:${kid.textColor};opacity:0.7;text-transform:uppercase;letter-spacing:1px">${isPre ? 'You showed' : 'You earned'}</p>
+            <p style="font-size:36px;font-weight:600;margin:6px 0;color:${kid.textColor}">${latest.value || 'Bonus'}</p>
+            <p style="font-size:15px;margin:0;color:${kid.textColor};opacity:0.85;line-height:1.4">"${latest.reason}"</p>
+            <p style="font-size:24px;font-weight:500;margin:16px 0 0;color:${kid.textColor}">+${fmt(latest.amount)}</p>
+            ${others > 0 ? `<p style="font-size:11px;margin:12px 0 0;color:${kid.textColor};opacity:0.65">+${others} more bonus${others > 1 ? 'es' : ''} earned</p>` : ''}
+            <button id="celebrate-close" style="margin-top:20px;background:${kid.textColor};color:white;border:none;padding:14px 32px;border-radius:var(--radius-lg);font-size:16px;font-weight:500">Awesome!</button>
+          </div>
+        </div>
+      `;
+
+      // Mark all unviewed as viewed
+      unviewedBonuses.forEach(b => { b.unviewed = false; });
+      scheduleSave();
+
+      // Play fanfare + speak the value name
+      playBonusFanfare();
+      if (isPre && latest.value) {
+        setTimeout(() => speak(`You showed ${latest.value}!`), 600);
+      }
+
+      $('celebrate-close').onclick = () => {
+        closeModal();
+        render();
+      };
+      $('celebrate-backdrop').onclick = (e) => {
+        if (e.target.id === 'celebrate-backdrop') {
+          closeModal();
+          render();
+        }
+      };
     }
 
     function renderPicker() {
       const tIdx = todayIdx();
       return `
+        ${renderPickerFamilyDashboard(tIdx)}
         <div class="picker">
           <p class="picker-title">Who's tapping today?</p>
           <div class="picker-grid">
@@ -1015,7 +1173,6 @@
               const avatarStyle = hasPhoto
                 ? `background-image:url('${k.photoURL}')`
                 : `background:${k.textColor}`;
-              // Today's progress
               const chores = k.chores || [];
               let todayScheduled = 0, todayDone = 0;
               chores.forEach(c => {
@@ -1026,14 +1183,13 @@
               });
               const pct = todayScheduled ? (todayDone / todayScheduled) : 0;
               const allDone = todayScheduled > 0 && todayDone === todayScheduled;
-              // Longest streak today
               const longestStreak = chores.reduce((a, c) => Math.max(a, c.streak || 0), 0);
-              // Ring math: 110px circle, radius 50, circumference 2*pi*50 ≈ 314.16
               const C = 314.16;
               const dashOffset = C * (1 - pct);
               const ringColor = allDone ? '#0F6E56' : k.accentColor;
+              const hasUnviewedBonus = (k.bonusHistory || []).some(b => b.unviewed);
               return `
-              <button class="kid-tile" data-kid="${id}" data-greeting="Hi ${k.name}!" style="background:${k.bgColor}">
+              <button class="kid-tile" data-kid="${id}" data-greeting="Hi ${k.name}!" style="background:${k.bgColor};position:relative">
                 <div class="kid-avatar-wrap" style="position:relative;display:inline-block">
                   <svg width="120" height="120" style="display:block;transform:rotate(-90deg)" aria-hidden="true">
                     <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="6"/>
@@ -1049,9 +1205,103 @@
                     : `${todayDone}/${todayScheduled} done today`}
                   ${longestStreak >= 3 ? ` \u00b7 \ud83d\udd25 ${longestStreak}` : ''}
                 </p>
+                ${hasUnviewedBonus ? `<div style="position:absolute;top:8px;right:8px;background:#BA7517;color:white;font-size:11px;padding:3px 8px;border-radius:10px;font-weight:500;animation:bounce 1.5s ease infinite">✨ New!</div>` : ''}
               </button>
             `;}).join('')}
           </div>
+        </div>
+      `;
+    }
+
+    function renderPickerFamilyDashboard(tIdx) {
+      // Family today: total scheduled and done across all kids
+      let famScheduled = 0, famDone = 0;
+      Object.values(state.kids).forEach(k => {
+        (k.chores || []).forEach(c => {
+          if (c.schedule[tIdx]) {
+            famScheduled++;
+            if (c.history[tIdx] === 'done') famDone++;
+          }
+        });
+      });
+
+      // Weekly inflow into jars (from history)
+      const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - tIdx); weekStart.setHours(0,0,0,0);
+      const weekStartISO = weekStart.toISOString().slice(0, 10);
+      let weeklyEarnings = 0;
+      Object.values(state.kids).forEach(k => {
+        ['saveHistory','giveHistory'].forEach(field => {
+          (k[field] || []).forEach(h => {
+            if (h.type === 'in' && h.date >= weekStartISO) weeklyEarnings += h.amount;
+          });
+        });
+      });
+      // saveHistory has 20% of earnings, giveHistory has 10%, so total earnings = (save+give) / 0.3 ... but simpler: track sum of all bonus.amount + chore approved this week
+      // Actually a cleaner approach: sum from bonusHistory + recompute approved chore earnings
+      let actualEarned = 0;
+      Object.values(state.kids).forEach(k => {
+        (k.bonusHistory || []).forEach(b => { if (b.date >= weekStartISO) actualEarned += b.amount; });
+        // approved chores: walk chore history but we don't store approval-date per chore tick; use saveHistory*5 as proxy isn't great
+        // Simplest: weeklyEarnings approximation using saveHistory entries (since save = 20% of every earning event)
+      });
+      // Use saveHistory inflow * 5 (since save=20% of the total earned event) as best estimate
+      let estimated = 0;
+      Object.values(state.kids).forEach(k => {
+        (k.saveHistory || []).forEach(h => {
+          if (h.type === 'in' && h.date >= weekStartISO) estimated += h.amount * 5;
+        });
+      });
+
+      // Recent value moments (last 5 across all kids)
+      const moments = [];
+      Object.entries(state.kids).forEach(([kidId, k]) => {
+        (k.bonusHistory || []).forEach(b => {
+          if (b.value) moments.push({ ...b, kidName: k.name, kidColor: k.textColor });
+        });
+      });
+      moments.sort((a, b) => (a.date < b.date ? 1 : -1));
+      const recentMoments = moments.slice(0, 5);
+
+      const values = state.familyValues || [];
+      const today = new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
+
+      return `
+        <div class="family-dashboard">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
+            <p style="font-size:13px;font-weight:500;margin:0;color:var(--text-secondary)">${today}</p>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+            <div style="padding:10px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+              <p style="font-size:11px;color:var(--text-secondary);margin:0;text-transform:uppercase;letter-spacing:0.5px">Family today</p>
+              <p style="font-size:18px;font-weight:500;margin:4px 0 0">${famScheduled === 0 ? 'No chores' : `${famDone}/${famScheduled} done`}</p>
+            </div>
+            <div style="padding:10px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+              <p style="font-size:11px;color:var(--text-secondary);margin:0;text-transform:uppercase;letter-spacing:0.5px">Earned this week</p>
+              <p style="font-size:18px;font-weight:500;margin:4px 0 0;color:#0F6E56">+${fmt(estimated)}</p>
+            </div>
+          </div>
+          ${values.length > 0 ? `
+            <div style="margin-bottom:10px">
+              <p style="font-size:11px;color:var(--text-secondary);margin:0 0 6px;text-transform:uppercase;letter-spacing:0.5px">Our values</p>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                ${values.map(v => `<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:var(--bg-secondary);border-radius:999px;font-size:12px;border:0.5px solid var(--border)"><span style="font-size:14px">${v.emoji || '⭐'}</span><span>${v.name}</span></span>`).join('')}
+              </div>
+            </div>
+          ` : ''}
+          ${recentMoments.length > 0 ? `
+            <div>
+              <p style="font-size:11px;color:var(--text-secondary);margin:0 0 6px;text-transform:uppercase;letter-spacing:0.5px">Recent moments</p>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                ${recentMoments.map(m => `
+                  <div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0">
+                    <span style="font-size:16px">${m.emoji || '⭐'}</span>
+                    <span><strong style="color:${m.kidColor}">${m.kidName}</strong> earned <strong>${m.value}</strong></span>
+                    <span style="margin-left:auto;color:var(--text-tertiary);font-size:11px">${formatDateShort(m.date)}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
         </div>
       `;
     }
@@ -1083,7 +1333,61 @@
           </div>
           ${renderChoreGrid(k, isPre, tIdx)}
         </div>
+        ${renderKidRecentValues(k, isPre)}
+        ${renderKidFamilyValues(isPre)}
       `;
+    }
+
+    function renderKidFamilyValues(isPre) {
+      const values = state.familyValues || [];
+      if (values.length === 0) return '';
+      return `
+        <div class="card" style="margin-top:1rem">
+          <p style="font-size:${isPre ? '15' : '13'}px;font-weight:500;margin:0 0 8px">${isPre ? '✨ Our family values' : 'Our family values'}</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            ${values.map(v => `
+              <button type="button" class="value-pill ${isPre ? 'value-pill-pre' : ''}" data-value-name="${v.name.replace(/"/g, '&quot;')}" style="display:flex;align-items:center;gap:6px;padding:${isPre ? '10px 14px' : '6px 10px'};border:0.5px solid var(--border);background:var(--bg-secondary);border-radius:999px;font-size:${isPre ? '15' : '12'}px">
+                <span style="font-size:${isPre ? '22' : '16'}px">${v.emoji || '⭐'}</span>
+                <span>${v.name}</span>
+              </button>
+            `).join('')}
+          </div>
+          ${isPre ? '<p style="font-size:11px;color:var(--text-secondary);margin:8px 0 0">Tap to hear</p>' : ''}
+        </div>
+      `;
+    }
+
+    function renderKidRecentValues(k, isPre) {
+      const recent = (k.bonusHistory || []).filter(b => b.value).slice(-5).reverse();
+      if (recent.length === 0) return '';
+      return `
+        <div class="card" style="margin-top:1rem">
+          <p style="font-size:${isPre ? '15' : '13'}px;font-weight:500;margin:0 0 8px">${isPre ? '🌟 What you have shown' : `${k.name}'s recent moments`}</p>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            ${recent.map(b => `
+              <div style="display:flex;align-items:center;gap:10px;padding:${isPre ? '10px' : '8px'};background:var(--bg-secondary);border-radius:var(--radius-md)">
+                <span style="font-size:${isPre ? '28' : '20'}px">${b.emoji || '⭐'}</span>
+                <div style="flex:1;min-width:0">
+                  <p style="font-size:${isPre ? '14' : '12'}px;font-weight:500;margin:0">${b.value}</p>
+                  <p style="font-size:${isPre ? '12' : '11'}px;color:var(--text-secondary);margin:2px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.reason}</p>
+                </div>
+                <p style="font-size:11px;color:var(--text-tertiary);margin:0;flex-shrink:0">${formatDateShort(b.date)}</p>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function formatDateShort(iso) {
+      if (!iso) return '';
+      const d = new Date(iso + 'T12:00:00');
+      const now = new Date();
+      const days = Math.floor((now - d) / 86400000);
+      if (days === 0) return 'today';
+      if (days === 1) return 'yesterday';
+      if (days < 7) return `${days}d ago`;
+      return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
     }
 
     function renderJars(k, isPre) {
@@ -1475,11 +1779,10 @@
     // ---------- Family values ----------
     function renderFamilyValues() {
       const values = state.familyValues || [];
-      // Tally bonuses per value, per kid, last 90 days
       const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90);
       const cutoffISO = cutoff.toISOString().slice(0, 10);
-      const tallies = {}; // tallies[value][kidId] = count
-      values.forEach(v => { tallies[v] = {}; Object.keys(state.kids).forEach(kid => tallies[v][kid] = 0); });
+      const tallies = {};
+      values.forEach(v => { tallies[v.name] = {}; Object.keys(state.kids).forEach(kid => tallies[v.name][kid] = 0); });
 
       Object.entries(state.kids).forEach(([kidId, k]) => {
         (k.bonusHistory || []).forEach(b => {
@@ -1499,11 +1802,12 @@
             ? `<p style="font-size:13px;color:var(--text-secondary);margin:0;padding:1rem 0;text-align:center">No values defined yet. Tap Edit to add some.</p>`
             : `<div style="display:flex;flex-direction:column;gap:6px">
                 ${values.map(v => {
-                  const totals = Object.entries(tallies[v] || {});
+                  const totals = Object.entries(tallies[v.name] || {});
                   const grand = totals.reduce((a, [, n]) => a + n, 0);
                   return `
                     <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg-secondary);border-radius:var(--radius-md)">
-                      <p style="font-size:13px;font-weight:500;margin:0;flex:1">${v}</p>
+                      <span style="font-size:20px">${v.emoji || '⭐'}</span>
+                      <p style="font-size:13px;font-weight:500;margin:0;flex:1">${v.name}</p>
                       <div style="display:flex;gap:8px;font-size:11px;color:var(--text-secondary)">
                         ${totals.map(([kidId, n]) => {
                           const k = state.kids[kidId];
@@ -1542,7 +1846,7 @@
             <div class="form-row">
               <label>Tag a value (optional)</label>
               <div class="flag-toggle" id="m-bonus-values" style="flex-wrap:wrap">
-                ${values.map(v => `<button type="button" class="bonus-value-btn" data-value="${v.replace(/"/g, '&quot;')}">${v}</button>`).join('')}
+                ${values.map(v => `<button type="button" class="bonus-value-btn" data-value="${v.name.replace(/"/g, '&quot;')}"><span style="font-size:14px;margin-right:4px">${v.emoji || '⭐'}</span>${v.name}</button>`).join('')}
               </div>
               ${values.length === 0 ? `<p style="font-size:11px;color:var(--text-tertiary);margin:6px 0 0">No values yet \u2014 tap Edit on Family values card to add.</p>` : ''}
             </div>
@@ -1574,17 +1878,30 @@
         if (amt <= 0) return alert('Enter an amount.');
         if (!reason) return alert('What did ' + k.name + ' do? Please add a short note.');
         const today = new Date().toISOString().slice(0,10);
-        // Apply 70/20/10 split (same as paid chore approval)
+        // Find emoji for the picked value
+        let pickedEmoji = null;
+        if (pickedValue) {
+          const v = (state.familyValues || []).find(x => x.name === pickedValue);
+          pickedEmoji = v ? v.emoji : null;
+        }
+        // 70/20/10 split
         k.spend = (k.spend || 0) + amt * 0.7;
         k.save  = (k.save  || 0) + amt * 0.2;
         k.give  = (k.give  || 0) + amt * 0.1;
         if (!k.bonusHistory) k.bonusHistory = [];
-        k.bonusHistory.push({ date: today, amount: amt, reason, value: pickedValue || null });
+        k.bonusHistory.push({
+          date: today,
+          amount: amt,
+          reason,
+          value: pickedValue || null,
+          emoji: pickedEmoji,
+          unviewed: true
+        });
         if (!k.saveHistory) k.saveHistory = [];
         k.saveHistory.push({ date: today, amount: amt * 0.2, type: 'in', note: 'Bonus: ' + reason });
         if (!k.giveHistory) k.giveHistory = [];
         k.giveHistory.push({ date: today, amount: amt * 0.1, type: 'in', note: 'Bonus: ' + reason });
-        playApprovalChime();
+        playBonusFanfare();
         scheduleSave();
         closeModal();
         render();
@@ -1592,24 +1909,50 @@
     }
 
     // ---------- Family values edit modal ----------
+    const VALUE_EMOJI_PALETTE = [
+      '⭐','✨','🌟','💫','🔥','💎','🏆','🎯','🎖️','🏅',
+      '🦁','🐻','🦊','🐢','🦉','🦅','🐺','🐯','🐬','🦒',
+      '❤️','💕','💖','💪','🤝','🙏','🌱','🌳','🌸','🌈',
+      '🔍','📚','🧠','💡','🎨','🎭','🎵','📖','✏️','🖌️',
+      '⚖️','🎁','🛠️','⏳','🧭','🗝️','🚀','⛵','🏔️','🌊'
+    ];
+
     function openValuesEditModal() {
-      const values = [...(state.familyValues || [])];
+      const values = JSON.parse(JSON.stringify(state.familyValues || []));
+
       const renderList = () => values.map((v, i) => `
-        <div style="display:flex;align-items:center;gap:6px;padding:6px;background:var(--bg-secondary);border-radius:var(--radius-md);margin-bottom:4px">
-          <p style="flex:1;font-size:13px;margin:0">${v}</p>
+        <div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg-secondary);border-radius:var(--radius-md);margin-bottom:6px">
+          <button type="button" class="value-emoji-btn" data-idx="${i}" style="width:38px;height:38px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:22px;padding:0">${v.emoji || '⭐'}</button>
+          <p style="flex:1;font-size:13px;font-weight:500;margin:0">${v.name}</p>
           <button type="button" class="value-remove-btn" data-idx="${i}" style="border:none;background:transparent;color:var(--danger-text);padding:4px"><i class="ti ti-trash" style="font-size:14px"></i></button>
         </div>
       `).join('');
+
+      const renderEmojiPicker = (idx) => `
+        <div class="modal-backdrop" id="emoji-picker-backdrop" style="z-index:1100">
+          <div class="modal" style="max-width:380px">
+            <h2 style="margin-bottom:8px">Pick emoji for "${values[idx].name}"</h2>
+            <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:6px;max-height:300px;overflow-y:auto;padding:8px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+              ${VALUE_EMOJI_PALETTE.map(em => `<button type="button" class="emoji-pick" data-emoji="${em}" style="width:100%;aspect-ratio:1;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:22px;padding:0">${em}</button>`).join('')}
+            </div>
+            <div class="modal-actions">
+              <button class="cancel" id="m-emoji-cancel">Cancel</button>
+            </div>
+          </div>
+        </div>
+      `;
+
       $('modal-root').innerHTML = `
         <div class="modal-backdrop" id="values-modal-backdrop">
           <div class="modal">
             <h2>Family values</h2>
-            <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px">Define what your family stands for. Tag bonuses with these to build a record over time.</p>
+            <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px">Define what your family stands for. Tap the emoji to change it. Tag bonuses with these to build a record over time.</p>
             <div id="values-list-wrap">${renderList()}</div>
             <div style="display:flex;gap:6px;margin-top:8px">
               <input type="text" id="m-value-new" maxlength="20" placeholder="Add a value (e.g. Resilience)" style="flex:1;padding:8px;border:0.5px solid var(--border);border-radius:var(--radius-md);font-size:13px">
               <button type="button" id="m-value-add" style="background:#0F6E56;color:white;border:none;padding:8px 14px;border-radius:var(--radius-md);font-size:13px;font-weight:500">Add</button>
             </div>
+            <p style="font-size:11px;color:var(--text-tertiary);margin:6px 0 0">An emoji will be auto-suggested; you can change it after.</p>
             <div class="modal-actions">
               <button class="cancel" id="m-values-cancel">Cancel</button>
               <button class="save" id="m-values-save">Save</button>
@@ -1628,15 +1971,37 @@
             refreshList();
           };
         });
+        document.querySelectorAll('.value-emoji-btn').forEach(b => {
+          b.onclick = () => {
+            const idx = parseInt(b.dataset.idx);
+            // Inject emoji picker overlay
+            const overlay = document.createElement('div');
+            overlay.innerHTML = renderEmojiPicker(idx);
+            $('modal-root').appendChild(overlay.firstElementChild);
+            $('emoji-picker-backdrop').onclick = (e) => {
+              if (e.target.id === 'emoji-picker-backdrop') {
+                $('emoji-picker-backdrop').remove();
+              }
+            };
+            $('m-emoji-cancel').onclick = () => $('emoji-picker-backdrop').remove();
+            document.querySelectorAll('.emoji-pick').forEach(eb => {
+              eb.onclick = () => {
+                values[idx].emoji = eb.dataset.emoji;
+                $('emoji-picker-backdrop').remove();
+                refreshList();
+              };
+            });
+          };
+        });
       };
       refreshList();
 
       $('m-value-add').onclick = () => {
-        const v = ($('m-value-new').value || '').trim();
-        if (!v) return;
+        const name = ($('m-value-new').value || '').trim();
+        if (!name) return;
         if (values.length >= 10) return alert('Limit 10 values.');
-        if (values.some(x => x.toLowerCase() === v.toLowerCase())) return alert('Already in the list.');
-        values.push(v);
+        if (values.some(x => x.name.toLowerCase() === name.toLowerCase())) return alert('Already in the list.');
+        values.push({ name, emoji: suggestEmoji(name) });
         $('m-value-new').value = '';
         refreshList();
       };
@@ -2127,6 +2492,14 @@
           e.stopPropagation();
           ensureAudio();
           speak(b.dataset.text, b);
+        };
+      });
+
+      // Value pills — pre-reader gets TTS playback
+      document.querySelectorAll('.value-pill-pre').forEach(b => {
+        b.onclick = () => {
+          ensureAudio();
+          speak(b.dataset.valueName);
         };
       });
 
