@@ -188,15 +188,25 @@
       border-radius: var(--radius-xl);
       overflow: hidden; margin-top: 12px;
     }
+    /* Make day-column area horizontally scrollable on narrow viewports */
+    .grid-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x proximity;
+    }
+    .grid-scroll::-webkit-scrollbar { height: 4px; }
+    .grid-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
     .grid-header {
       display: grid; grid-template-columns: 1fr repeat(7, 36px); gap: 0;
       padding: 10px 12px 6px;
       border-bottom: 0.5px solid var(--border);
       background: var(--bg-secondary);
+      min-width: max-content;
     }
     .grid-header-day {
       text-align: center; font-size: 11px; font-weight: 500;
       color: var(--text-secondary); text-transform: uppercase;
+      scroll-snap-align: center;
     }
     .grid-header-day.today { color: var(--info-text); }
     .grid-header-day.today::after {
@@ -208,9 +218,14 @@
       display: grid; grid-template-columns: 1fr repeat(7, 36px); gap: 0;
       padding: 12px; align-items: center;
       border-bottom: 0.5px solid var(--border);
+      min-width: max-content;
     }
     .chore-row:last-child { border-bottom: none; }
-    .chore-info { display: flex; align-items: center; gap: 10px; min-width: 0; padding-right: 8px; }
+    .chore-info {
+      display: flex; align-items: center; gap: 10px;
+      min-width: 200px; max-width: 240px;
+      padding-right: 8px;
+    }
     .chore-icon-circle {
       border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
@@ -574,6 +589,7 @@
   </div>
   <div id="app" style="display: none;"></div>
   <div id="modal-root"></div>
+  <div id="version-footer" style="text-align:center;font-size:10px;color:rgba(0,0,0,0.3);padding:8px;cursor:pointer;user-select:none;display:none">Family CFO · v7</div>
 
   <!-- Firebase v10 (modular) via CDN -->
   <script type="module">
@@ -693,6 +709,11 @@
         { name: 'Kindness', emoji: '❤️' },
         { name: 'Resilience', emoji: '💪' },
       ],
+      familyMottos: [
+        'Work hard, play hard',
+        'Try, fail, try again',
+        'We help each other',
+      ],
     };
 
     // Auto-suggest emoji for common value names
@@ -761,12 +782,141 @@
       return new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
     }
 
-    async function uploadKidPhoto(kidId, file) {
-      const blob = await resizeImage(file, 256);
+    async function uploadKidPhoto(kidId, fileOrBlob) {
+      let blob;
+      // If already a non-File Blob (e.g. from crop canvas), upload as-is
+      if (fileOrBlob instanceof Blob && !(fileOrBlob instanceof File)) {
+        blob = fileOrBlob;
+      } else {
+        blob = await resizeImage(fileOrBlob, 256);
+      }
       const path = `families/${FAMILY_ID}/kids/${kidId}.jpg`;
       const r = storageRef(storage, path);
       await uploadBytes(r, blob, { contentType: 'image/jpeg' });
       return await getDownloadURL(r);
+    }
+
+    // Photo crop modal. Returns a Promise<Blob | null> (null if cancelled).
+    function openPhotoCropModal(file) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result;
+          const img = new Image();
+          img.onload = () => showCropUI(img, resolve);
+          img.onerror = () => { alert('Could not load image.'); resolve(null); };
+          img.src = dataUrl;
+        };
+        reader.onerror = () => { alert('Could not read file.'); resolve(null); };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function showCropUI(img, resolve) {
+      const SIZE = 260;
+      // Inject crop modal as overlay (don't replace existing modal-root content)
+      const overlayDiv = document.createElement('div');
+      overlayDiv.id = 'crop-overlay';
+      overlayDiv.innerHTML = `
+        <div class="modal-backdrop" id="crop-backdrop" style="z-index:1100">
+          <div class="modal" style="max-width:340px;text-align:center">
+            <h2>Position photo</h2>
+            <p style="font-size:12px;color:var(--text-secondary);margin:0 0 12px">Drag to move. Use the slider to zoom. The circle is what will be saved.</p>
+            <div id="crop-stage" style="position:relative;width:${SIZE}px;height:${SIZE}px;margin:0 auto;background:#000;border-radius:8px;overflow:hidden;cursor:grab;touch-action:none">
+              <img id="crop-img" src="${img.src}" style="position:absolute;left:0;top:0;transform-origin:0 0;user-select:none;pointer-events:none" draggable="false">
+              <div style="position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 9999px rgba(0,0,0,0.5);pointer-events:none"></div>
+              <div style="position:absolute;inset:0;border-radius:50%;border:2px dashed rgba(255,255,255,0.6);pointer-events:none"></div>
+            </div>
+            <div style="margin-top:12px;display:flex;align-items:center;gap:8px">
+              <i class="ti ti-zoom-out" style="font-size:18px;color:var(--text-secondary)"></i>
+              <input type="range" id="crop-zoom" min="100" max="400" value="100" style="flex:1">
+              <i class="ti ti-zoom-in" style="font-size:18px;color:var(--text-secondary)"></i>
+            </div>
+            <div class="modal-actions">
+              <button class="cancel" id="crop-cancel">Cancel</button>
+              <button class="save" id="crop-save">Use this</button>
+            </div>
+          </div>
+        </div>
+      `;
+      $('modal-root').appendChild(overlayDiv);
+
+      const removeOverlay = () => {
+        const o = $('crop-overlay');
+        if (o) o.remove();
+      };
+
+      const stage = $('crop-stage');
+      const imgEl = $('crop-img');
+
+      const baseScale = SIZE / Math.min(img.width, img.height);
+      let scale = baseScale;
+      let userZoom = 1;
+      let offsetX = (SIZE - img.width * scale) / 2;
+      let offsetY = (SIZE - img.height * scale) / 2;
+
+      function applyTransform() {
+        const finalScale = scale * userZoom;
+        const minX = SIZE - img.width * finalScale;
+        const minY = SIZE - img.height * finalScale;
+        if (offsetX > 0) offsetX = 0;
+        if (offsetY > 0) offsetY = 0;
+        if (offsetX < minX) offsetX = minX;
+        if (offsetY < minY) offsetY = minY;
+        imgEl.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${finalScale})`;
+      }
+      applyTransform();
+
+      let dragging = false, dx = 0, dy = 0;
+      const start = (x, y) => { dragging = true; dx = x - offsetX; dy = y - offsetY; stage.style.cursor = 'grabbing'; };
+      const move = (x, y) => { if (!dragging) return; offsetX = x - dx; offsetY = y - dy; applyTransform(); };
+      const end = () => { dragging = false; stage.style.cursor = 'grab'; };
+
+      const mouseMove = e => move(e.clientX, e.clientY);
+      const mouseUp = () => end();
+      stage.addEventListener('mousedown', e => start(e.clientX, e.clientY));
+      window.addEventListener('mousemove', mouseMove);
+      window.addEventListener('mouseup', mouseUp);
+      stage.addEventListener('touchstart', e => { const t = e.touches[0]; start(t.clientX, t.clientY); }, { passive: true });
+      stage.addEventListener('touchmove', e => { const t = e.touches[0]; move(t.clientX, t.clientY); e.preventDefault(); }, { passive: false });
+      stage.addEventListener('touchend', end);
+
+      const zoomInput = $('crop-zoom');
+      zoomInput.oninput = (e) => {
+        const newZoom = parseInt(e.target.value) / 100;
+        const cx = SIZE / 2, cy = SIZE / 2;
+        const px = (cx - offsetX) / (scale * userZoom);
+        const py = (cy - offsetY) / (scale * userZoom);
+        userZoom = newZoom;
+        offsetX = cx - px * scale * userZoom;
+        offsetY = cy - py * scale * userZoom;
+        applyTransform();
+      };
+
+      const cleanup = () => {
+        window.removeEventListener('mousemove', mouseMove);
+        window.removeEventListener('mouseup', mouseUp);
+        removeOverlay();
+      };
+
+      $('crop-cancel').onclick = () => { cleanup(); resolve(null); };
+      $('crop-backdrop').onclick = (e) => { if (e.target.id === 'crop-backdrop') { cleanup(); resolve(null); } };
+
+      $('crop-save').onclick = () => {
+        const OUT = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = OUT; canvas.height = OUT;
+        const ctx = canvas.getContext('2d');
+        const finalScale = scale * userZoom;
+        const sx = -offsetX / finalScale;
+        const sy = -offsetY / finalScale;
+        const sSize = SIZE / finalScale;
+        ctx.drawImage(img, sx, sy, sSize, sSize, 0, 0, OUT, OUT);
+        canvas.toBlob((blob) => {
+          cleanup();
+          resolve(blob);
+        }, 'image/jpeg', 0.88);
+      };
     }
 
     async function deleteKidPhoto(kidId) {
@@ -783,6 +933,8 @@
     let state = null;
     let view = 'picker';
     let activeKid = null;
+    let parentUnlocked = false; // Session-only — must enter PIN each time app opens to access Parent CFO
+    let devTabUnlocked = false; // Hidden dev tab — unlocked via easter egg tap pattern
     let unsubscribe = null;
     let saveTimer = null;
     let isOnline = navigator.onLine;
@@ -1022,6 +1174,13 @@
           emoji: suggestEmoji(name)
         }));
       }
+      if (!state.familyMottos) {
+        state.familyMottos = [
+          'Work hard, play hard',
+          'Try, fail, try again',
+          'We help each other',
+        ];
+      }
     }
 
     function maybeWeeklyReset() {
@@ -1098,8 +1257,9 @@
       // Top nav (always shown)
       body += `
         <div class="top-nav">
-          <button class="nav-btn ${view !== 'parent' ? 'active' : ''}" data-view="picker">Kids tablet</button>
+          <button class="nav-btn ${view !== 'parent' && view !== 'dev' ? 'active' : ''}" data-view="picker">Kids tablet</button>
           <button class="nav-btn ${view === 'parent' ? 'active' : ''}" data-view="parent">Parent CFO</button>
+          ${devTabUnlocked ? `<button class="nav-btn ${view === 'dev' ? 'active' : ''}" data-view="dev" style="background:#FCEBEB;color:#A32D2D">🛠 Dev</button>` : ''}
           <div class="top-nav-right">
             <button class="icon-btn" id="sound-toggle" aria-label="Toggle sound">
               <i class="ti ti-volume${soundOn ? '' : '-off'}" style="font-size:16px"></i>
@@ -1123,6 +1283,7 @@
       }
 
       if (view === 'parent') body += renderParent(tIdx);
+      else if (view === 'dev' && devTabUnlocked) body += renderDevTab();
       else if (view === 'kid' && activeKid) body += renderKid(activeKid, tIdx);
       else body += renderPicker();
 
@@ -1130,6 +1291,16 @@
       attachHandlers();
       if (view === 'kid' && activeKid && state.kids[activeKid].mode === 'pre-reader') {
         renderVoicePicker();
+      }
+      // Auto-scroll the grid horizontally so today is visible
+      if (view === 'kid' && activeKid) {
+        const scroll = document.querySelector('.grid-scroll');
+        const todayHeader = document.querySelector('.grid-header-day.today');
+        if (scroll && todayHeader) {
+          // Scroll so today's column sits near the visible right edge
+          const target = todayHeader.offsetLeft - 100;
+          scroll.scrollTo({ left: Math.max(0, target), behavior: 'auto' });
+        }
       }
       // Check for unviewed bonuses when kid enters their view
       if (view === 'kid' && activeKid) {
@@ -1287,11 +1458,22 @@
       const values = state.familyValues || [];
       const today = new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
 
+      // Motto of the day — cycle through familyMottos by day-of-year
+      const mottos = state.familyMottos || [];
+      const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+      const motto = mottos.length > 0 ? mottos[dayOfYear % mottos.length] : null;
+
       return `
         <div class="family-dashboard">
           <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
             <p style="font-size:13px;font-weight:500;margin:0;color:var(--text-secondary)">${today}</p>
           </div>
+          ${motto ? `
+            <div style="padding:14px;background:linear-gradient(135deg, #FAECE7 0%, #E1F5EE 100%);border-radius:var(--radius-md);margin-bottom:12px;text-align:center">
+              <p style="font-size:11px;color:var(--text-secondary);margin:0 0 4px;text-transform:uppercase;letter-spacing:0.8px">Today's motto</p>
+              <p style="font-size:17px;font-weight:500;margin:0;font-style:italic">"${motto}"</p>
+            </div>
+          ` : ''}
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
             <div style="padding:10px;background:var(--bg-secondary);border-radius:var(--radius-md)">
               <p style="font-size:11px;color:var(--text-secondary);margin:0;text-transform:uppercase;letter-spacing:0.5px">Family today</p>
@@ -1491,11 +1673,13 @@
         </div>`;
       return `
         <div class="chore-grid ${tapClass}">
-          ${headerRow}
-          ${routines.length ? sectionHeader('🌟 Routines', 'being part of the family') : ''}
-          ${routines.map(c => renderChoreRow(c, k, isPre, tIdx)).join('')}
-          ${extras.length ? sectionHeader('💼 Paid jobs', `extras you can earn money on`) : ''}
-          ${extras.map(c => renderChoreRow(c, k, isPre, tIdx)).join('')}
+          <div class="grid-scroll">
+            ${headerRow}
+            ${routines.length ? sectionHeader('🌟 Routines', 'being part of the family') : ''}
+            ${routines.map(c => renderChoreRow(c, k, isPre, tIdx)).join('')}
+            ${extras.length ? sectionHeader('💼 Paid jobs', `extras you can earn money on`) : ''}
+            ${extras.map(c => renderChoreRow(c, k, isPre, tIdx)).join('')}
+          </div>
         </div>
       `;
     }
@@ -1637,6 +1821,13 @@
         </div>
 
         ${renderChoreManagement()}
+
+        <div class="card">
+          <p style="font-size:14px;font-weight:500;margin:0 0 8px"><i class="ti ti-settings" style="font-size:16px;vertical-align:-2px"></i> Settings</p>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <button id="change-pin-btn" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px"><i class="ti ti-lock" style="font-size:14px;vertical-align:-1px;margin-right:6px"></i><strong>Change Parent PIN</strong> — update your 4-digit unlock code</button>
+          </div>
+        </div>
 
         <div class="manager-note">
           <i class="ti ti-sparkles" style="font-size:20px;flex-shrink:0;margin-top:2px"></i>
@@ -1798,6 +1989,274 @@
       `;
     }
 
+    // ---------- Dev tab (destructive testing tools) ----------
+    function renderDevTab() {
+      const familyDocSize = JSON.stringify(state).length;
+      const totalChores = Object.values(state.kids).reduce((a, k) => a + (k.chores || []).length, 0);
+      const totalApprovals = (state.pendingApprovals || []).length;
+      const totalCash = Object.values(state.kids).reduce((a, k) => a + (k.spend || 0) + (k.save || 0) + (k.give || 0), 0);
+
+      return `
+        <div class="card" style="border:1px solid var(--danger-text);background:#FFF8F8">
+          <p style="font-size:14px;font-weight:500;margin:0 0 8px;color:var(--danger-text)"><i class="ti ti-tools" style="font-size:16px;vertical-align:-2px"></i> Developer / testing tools</p>
+          <p style="font-size:12px;color:var(--text-secondary);margin:0 0 12px">⚠️ These actions are destructive. Used for testing during development. Each requires you to type the confirmation word to proceed.</p>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+            <div style="padding:10px;background:var(--bg-primary);border-radius:var(--radius-md);border:0.5px solid var(--border)">
+              <p style="font-size:11px;color:var(--text-secondary);margin:0;text-transform:uppercase;letter-spacing:0.5px">Doc size</p>
+              <p style="font-size:14px;font-weight:500;margin:2px 0 0">${(familyDocSize / 1024).toFixed(1)} KB</p>
+            </div>
+            <div style="padding:10px;background:var(--bg-primary);border-radius:var(--radius-md);border:0.5px solid var(--border)">
+              <p style="font-size:11px;color:var(--text-secondary);margin:0;text-transform:uppercase;letter-spacing:0.5px">Chores</p>
+              <p style="font-size:14px;font-weight:500;margin:2px 0 0">${totalChores}</p>
+            </div>
+            <div style="padding:10px;background:var(--bg-primary);border-radius:var(--radius-md);border:0.5px solid var(--border)">
+              <p style="font-size:11px;color:var(--text-secondary);margin:0;text-transform:uppercase;letter-spacing:0.5px">Pending</p>
+              <p style="font-size:14px;font-weight:500;margin:2px 0 0">${totalApprovals}</p>
+            </div>
+            <div style="padding:10px;background:var(--bg-primary);border-radius:var(--radius-md);border:0.5px solid var(--border)">
+              <p style="font-size:11px;color:var(--text-secondary);margin:0;text-transform:uppercase;letter-spacing:0.5px">Total cash</p>
+              <p style="font-size:14px;font-weight:500;margin:2px 0 0">${fmt(totalCash)}</p>
+            </div>
+          </div>
+
+          <p style="font-size:12px;font-weight:500;margin:0 0 6px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px">Destructive actions</p>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+            <button class="dev-action-btn" data-action="nuke-history" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px">
+              <strong>🗑️ Reset chore history</strong> — clear all ticks, keep chores, jars and bonus history. Useful for testing the weekly cycle.
+            </button>
+            <button class="dev-action-btn" data-action="nuke-money" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px">
+              <strong>💸 Reset all jars to $0</strong> — clear spend/save/give for both kids, plus all transaction history. Chores untouched.
+            </button>
+            <button class="dev-action-btn" data-action="nuke-bonus" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px">
+              <strong>✨ Clear bonus history</strong> — wipe all awarded bonuses for both kids. Useful for testing values reset.
+            </button>
+            <button class="dev-action-btn" data-action="nuke-pending" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px">
+              <strong>⏳ Clear pending approvals</strong> — drop the queue. No money flow happens.
+            </button>
+            <button class="dev-action-btn" data-action="full-reset" style="text-align:left;padding:10px 12px;border:1px solid var(--danger-text);background:#FFE0E0;border-radius:var(--radius-md);font-size:13px;color:var(--danger-text)">
+              <strong>💥 NUCLEAR: reset everything to defaults</strong> — wipes EVERYTHING including kids, chores, jars, values, mottos, PIN. Starts fresh.
+            </button>
+          </div>
+
+          <p style="font-size:12px;font-weight:500;margin:0 0 6px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px">Test data</p>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+            <button class="dev-action-btn" data-action="seed-week" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px">
+              <strong>🎲 Seed a week of ticks</strong> — auto-mark each kid as having done ~80% of their chores this week. Approvals auto-applied.
+            </button>
+            <button class="dev-action-btn" data-action="seed-bonuses" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px">
+              <strong>🌟 Seed 5 test bonuses</strong> — random value bonuses to both kids across the last 30 days.
+            </button>
+          </div>
+
+          <p style="font-size:12px;font-weight:500;margin:0 0 6px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px">Backup / restore</p>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+            <button id="dev-export-btn" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px">
+              <strong>📤 Export full state as JSON</strong> — downloads a backup file you can keep safe.
+            </button>
+            <button id="dev-import-btn" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px">
+              <strong>📥 Import state from JSON</strong> — restore from a previous backup. Replaces all current data.
+            </button>
+          </div>
+
+          <details style="margin-top:12px">
+            <summary style="font-size:12px;color:var(--text-secondary);cursor:pointer">Show raw state (read-only)</summary>
+            <pre style="font-size:10px;background:var(--bg-secondary);padding:10px;border-radius:var(--radius-md);overflow:auto;max-height:300px;margin-top:8px">${JSON.stringify(state, null, 2).replace(/</g, '&lt;')}</pre>
+          </details>
+        </div>
+      `;
+    }
+
+    function openDevConfirmModal(actionLabel, dangerWord, onConfirm) {
+      $('modal-root').innerHTML = `
+        <div class="modal-backdrop" id="dev-confirm-backdrop">
+          <div class="modal" style="max-width:380px">
+            <h2><i class="ti ti-alert-triangle" style="font-size:18px;vertical-align:-2px;color:var(--danger-text)"></i> Confirm: ${actionLabel}</h2>
+            <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px">This action cannot be undone. To confirm, type <strong style="color:var(--danger-text);font-family:monospace">${dangerWord}</strong> below.</p>
+            <input type="text" id="m-dev-confirm" placeholder="Type ${dangerWord}" style="width:100%;padding:10px;border:0.5px solid var(--border);border-radius:var(--radius-md);font-size:14px;font-family:monospace;text-transform:uppercase">
+            <p id="m-dev-err" style="font-size:12px;color:var(--danger-text);margin:6px 0 0;min-height:18px"></p>
+            <div class="modal-actions">
+              <button class="cancel" id="m-dev-cancel">Cancel</button>
+              <button class="save" id="m-dev-go" style="background:var(--danger-text)">Yes, do it</button>
+            </div>
+          </div>
+        </div>
+      `;
+      $('dev-confirm-backdrop').onclick = (e) => { if (e.target.id === 'dev-confirm-backdrop') closeModal(); };
+      $('m-dev-cancel').onclick = closeModal;
+      $('m-dev-confirm').focus();
+      $('m-dev-go').onclick = () => {
+        const v = ($('m-dev-confirm').value || '').trim().toUpperCase();
+        if (v !== dangerWord.toUpperCase()) {
+          $('m-dev-err').textContent = `You must type "${dangerWord}" exactly.`;
+          return;
+        }
+        closeModal();
+        onConfirm();
+      };
+    }
+
+    function runDevAction(action) {
+      const labels = {
+        'nuke-history': ['Reset chore history', 'RESET'],
+        'nuke-money': ['Reset all jars to $0', 'NUKE'],
+        'nuke-bonus': ['Clear bonus history', 'CLEAR'],
+        'nuke-pending': ['Clear pending approvals', 'CLEAR'],
+        'full-reset': ['NUCLEAR reset', 'NUKE'],
+      };
+      const [label, word] = labels[action];
+      openDevConfirmModal(label, word, () => {
+        if (action === 'nuke-history') {
+          Object.values(state.kids).forEach(k => {
+            (k.chores || []).forEach(c => {
+              c.history = c.schedule.map(s => s ? 'available' : 'na');
+              c.streak = 0;
+            });
+          });
+        } else if (action === 'nuke-money') {
+          Object.values(state.kids).forEach(k => {
+            k.spend = 0; k.save = 0; k.give = 0;
+            k.spendHistory = []; k.saveHistory = []; k.giveHistory = [];
+          });
+        } else if (action === 'nuke-bonus') {
+          Object.values(state.kids).forEach(k => { k.bonusHistory = []; });
+        } else if (action === 'nuke-pending') {
+          state.pendingApprovals = [];
+          Object.values(state.kids).forEach(k => {
+            (k.chores || []).forEach(c => {
+              c.history = c.history.map(h => h === 'pending' ? 'available' : h);
+            });
+          });
+        } else if (action === 'full-reset') {
+          // Wipe everything except photoURLs (storage handles those separately)
+          const photos = {};
+          Object.entries(state.kids).forEach(([id, k]) => { if (k.photoURL) photos[id] = k.photoURL; });
+          state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+          // Re-apply photos so we don't lose them
+          Object.entries(photos).forEach(([id, url]) => {
+            if (state.kids[id]) state.kids[id].photoURL = url;
+          });
+        }
+        scheduleSave();
+        render();
+      });
+    }
+
+    function seedTestData(kind) {
+      const tIdx = todayIdx();
+      const today = new Date().toISOString().slice(0,10);
+      if (kind === 'week') {
+        Object.values(state.kids).forEach(k => {
+          (k.chores || []).forEach(c => {
+            c.history = c.schedule.map((s, i) => {
+              if (!s) return 'na';
+              if (i > tIdx) return 'available';
+              // ~80% done rate
+              if (Math.random() < 0.8) {
+                // For paid chores, add money + mark done
+                if (c.paid) {
+                  k.spend = (k.spend || 0) + c.amount * 0.7;
+                  k.save = (k.save || 0) + c.amount * 0.2;
+                  k.give = (k.give || 0) + c.amount * 0.1;
+                  if (!k.saveHistory) k.saveHistory = [];
+                  k.saveHistory.push({ date: today, amount: c.amount * 0.2, type: 'in', note: c.title });
+                  if (!k.giveHistory) k.giveHistory = [];
+                  k.giveHistory.push({ date: today, amount: c.amount * 0.1, type: 'in', note: c.title });
+                }
+                return 'done';
+              }
+              return 'missed';
+            });
+            // Recompute streak
+            let s = 0;
+            for (let i = tIdx; i >= 0; i--) {
+              if (c.history[i] === 'done') s++;
+              else if (c.history[i] === 'na') continue;
+              else break;
+            }
+            c.streak = s;
+          });
+        });
+      } else if (kind === 'bonuses') {
+        const values = state.familyValues || [];
+        const reasons = [
+          'Helped without being asked',
+          'Stayed calm during a tough moment',
+          'Shared with their brother',
+          'Tried something new and hard',
+          'Told the truth even though it was hard'
+        ];
+        Object.entries(state.kids).forEach(([kidId, k]) => {
+          for (let i = 0; i < 5; i++) {
+            const v = values[Math.floor(Math.random() * values.length)];
+            const r = reasons[Math.floor(Math.random() * reasons.length)];
+            const amt = [1, 2, 2, 3][Math.floor(Math.random() * 4)];
+            const daysAgo = Math.floor(Math.random() * 30);
+            const d = new Date(); d.setDate(d.getDate() - daysAgo);
+            const dateISO = d.toISOString().slice(0, 10);
+            k.spend = (k.spend || 0) + amt * 0.7;
+            k.save = (k.save || 0) + amt * 0.2;
+            k.give = (k.give || 0) + amt * 0.1;
+            if (!k.bonusHistory) k.bonusHistory = [];
+            k.bonusHistory.push({
+              date: dateISO,
+              amount: amt,
+              reason: r,
+              value: v ? v.name : null,
+              emoji: v ? v.emoji : null,
+              unviewed: false
+            });
+          }
+        });
+      }
+      scheduleSave();
+      render();
+    }
+
+    function exportStateAsJSON() {
+      const dataStr = JSON.stringify(state, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const ts = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+      a.href = url;
+      a.download = `family-cfo-backup-${ts}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function importStateFromJSON() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/json';
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const imported = JSON.parse(reader.result);
+            if (!imported.kids) {
+              alert('Invalid backup file — missing kids data.');
+              return;
+            }
+            openDevConfirmModal('Import & replace all data', 'IMPORT', () => {
+              state = imported;
+              scheduleSave();
+              render();
+              alert('Data imported. App will refresh.');
+            });
+          } catch (err) {
+            alert('Could not parse JSON: ' + err.message);
+          }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    }
+
     // ---------- Family values ----------
     function renderFamilyValues() {
       const values = state.familyValues || [];
@@ -1939,14 +2398,144 @@
       '⚖️','🎁','🛠️','⏳','🧭','🗝️','🚀','⛵','🏔️','🌊'
     ];
 
+    // ---------- PIN protection for Parent CFO ----------
+    function openPinSetupModal() {
+      $('modal-root').innerHTML = `
+        <div class="modal-backdrop" id="pin-setup-backdrop">
+          <div class="modal" style="max-width:380px;text-align:center">
+            <h2><i class="ti ti-lock" style="font-size:18px;vertical-align:-2px"></i> Set a Parent PIN</h2>
+            <p style="font-size:13px;color:var(--text-secondary);margin:0 0 16px">Pick a 4-digit PIN so the boys can't open Parent CFO and approve their own chores. You'll enter this each time you open the app.</p>
+            <div class="form-row">
+              <label>Choose PIN (4 digits)</label>
+              <input type="tel" id="m-pin-set1" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••" style="text-align:center;font-size:28px;letter-spacing:10px">
+            </div>
+            <div class="form-row">
+              <label>Confirm PIN</label>
+              <input type="tel" id="m-pin-set2" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••" style="text-align:center;font-size:28px;letter-spacing:10px">
+            </div>
+            <p id="m-pin-err" style="font-size:12px;color:var(--danger-text);margin:0;min-height:18px"></p>
+            <div class="modal-actions">
+              <button class="cancel" id="m-pin-cancel">Cancel</button>
+              <button class="save" id="m-pin-save">Set PIN</button>
+            </div>
+          </div>
+        </div>
+      `;
+      $('pin-setup-backdrop').onclick = (e) => { if (e.target.id === 'pin-setup-backdrop') closeModal(); };
+      $('m-pin-cancel').onclick = closeModal;
+      $('m-pin-set1').focus();
+      $('m-pin-set1').onkeydown = (e) => { if (e.key === 'Enter') $('m-pin-set2').focus(); };
+      $('m-pin-set2').onkeydown = (e) => { if (e.key === 'Enter') $('m-pin-save').click(); };
+      $('m-pin-save').onclick = () => {
+        const a = ($('m-pin-set1').value || '').trim();
+        const b = ($('m-pin-set2').value || '').trim();
+        const err = $('m-pin-err');
+        if (!/^\d{4}$/.test(a)) { err.textContent = 'PIN must be exactly 4 digits.'; return; }
+        if (a !== b) { err.textContent = 'PINs do not match.'; return; }
+        state.parentPin = a;
+        scheduleSave();
+        parentUnlocked = true;
+        view = 'parent';
+        closeModal();
+        render();
+      };
+    }
+
+    function openPinEntryModal() {
+      $('modal-root').innerHTML = `
+        <div class="modal-backdrop" id="pin-entry-backdrop">
+          <div class="modal" style="max-width:380px;text-align:center">
+            <h2><i class="ti ti-lock" style="font-size:18px;vertical-align:-2px"></i> Parent PIN</h2>
+            <p style="font-size:13px;color:var(--text-secondary);margin:0 0 16px">Enter your 4-digit PIN to open Parent CFO.</p>
+            <input type="tel" id="m-pin-entry" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••" style="text-align:center;font-size:36px;letter-spacing:14px;padding:14px;width:100%;border:0.5px solid var(--border);border-radius:var(--radius-md);background:var(--bg-primary)" autofocus>
+            <p id="m-pin-err" style="font-size:12px;color:var(--danger-text);margin:8px 0;min-height:18px"></p>
+            <div class="modal-actions">
+              <button class="cancel" id="m-pin-cancel">Cancel</button>
+              <button class="save" id="m-pin-submit">Unlock</button>
+            </div>
+            <p style="font-size:11px;color:var(--text-tertiary);margin:12px 0 0">Forgot PIN? Sign out and sign back in. You'll be prompted to set a new one.</p>
+          </div>
+        </div>
+      `;
+      $('pin-entry-backdrop').onclick = (e) => { if (e.target.id === 'pin-entry-backdrop') closeModal(); };
+      $('m-pin-cancel').onclick = closeModal;
+      const submit = () => {
+        const v = ($('m-pin-entry').value || '').trim();
+        if (v === state.parentPin) {
+          parentUnlocked = true;
+          view = 'parent';
+          closeModal();
+          render();
+        } else {
+          $('m-pin-err').textContent = 'Wrong PIN. Try again.';
+          $('m-pin-entry').value = '';
+          $('m-pin-entry').focus();
+        }
+      };
+      $('m-pin-submit').onclick = submit;
+      $('m-pin-entry').onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+      setTimeout(() => $('m-pin-entry').focus(), 50);
+    }
+
+    function openChangePinModal() {
+      $('modal-root').innerHTML = `
+        <div class="modal-backdrop" id="change-pin-backdrop">
+          <div class="modal" style="max-width:380px">
+            <h2>Change Parent PIN</h2>
+            <div class="form-row">
+              <label>Current PIN</label>
+              <input type="tel" id="m-cp-old" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••" style="text-align:center;font-size:24px;letter-spacing:10px">
+            </div>
+            <div class="form-row">
+              <label>New PIN</label>
+              <input type="tel" id="m-cp-new1" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••" style="text-align:center;font-size:24px;letter-spacing:10px">
+            </div>
+            <div class="form-row">
+              <label>Confirm new PIN</label>
+              <input type="tel" id="m-cp-new2" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••" style="text-align:center;font-size:24px;letter-spacing:10px">
+            </div>
+            <p id="m-cp-err" style="font-size:12px;color:var(--danger-text);margin:0;min-height:18px"></p>
+            <div class="modal-actions">
+              <button class="cancel" id="m-cp-cancel">Cancel</button>
+              <button class="save" id="m-cp-save">Change PIN</button>
+            </div>
+          </div>
+        </div>
+      `;
+      $('change-pin-backdrop').onclick = (e) => { if (e.target.id === 'change-pin-backdrop') closeModal(); };
+      $('m-cp-cancel').onclick = closeModal;
+      $('m-cp-save').onclick = () => {
+        const cur = ($('m-cp-old').value || '').trim();
+        const a = ($('m-cp-new1').value || '').trim();
+        const b = ($('m-cp-new2').value || '').trim();
+        const err = $('m-cp-err');
+        if (cur !== state.parentPin) { err.textContent = 'Current PIN is wrong.'; return; }
+        if (!/^\d{4}$/.test(a)) { err.textContent = 'New PIN must be 4 digits.'; return; }
+        if (a !== b) { err.textContent = 'New PINs do not match.'; return; }
+        state.parentPin = a;
+        scheduleSave();
+        closeModal();
+        alert('PIN updated.');
+      };
+    }
+
     function openValuesEditModal() {
       const values = JSON.parse(JSON.stringify(state.familyValues || []));
+      const mottos = [...(state.familyMottos || [])];
 
       const renderList = () => values.map((v, i) => `
         <div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg-secondary);border-radius:var(--radius-md);margin-bottom:6px">
           <button type="button" class="value-emoji-btn" data-idx="${i}" style="width:38px;height:38px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:22px;padding:0">${v.emoji || '⭐'}</button>
           <p style="flex:1;font-size:13px;font-weight:500;margin:0">${v.name}</p>
           <button type="button" class="value-remove-btn" data-idx="${i}" style="border:none;background:transparent;color:var(--danger-text);padding:4px"><i class="ti ti-trash" style="font-size:14px"></i></button>
+        </div>
+      `).join('');
+
+      const renderMottosList = () => mottos.map((m, i) => `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg-secondary);border-radius:var(--radius-md);margin-bottom:6px">
+          <span style="font-size:18px">"</span>
+          <p style="flex:1;font-size:13px;font-style:italic;margin:0">${m}</p>
+          <button type="button" class="motto-remove-btn" data-idx="${i}" style="border:none;background:transparent;color:var(--danger-text);padding:4px"><i class="ti ti-trash" style="font-size:14px"></i></button>
         </div>
       `).join('');
 
@@ -1967,14 +2556,22 @@
       $('modal-root').innerHTML = `
         <div class="modal-backdrop" id="values-modal-backdrop">
           <div class="modal">
-            <h2>Family values</h2>
-            <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px">Define what your family stands for. Tap the emoji to change it. Tag bonuses with these to build a record over time.</p>
+            <h2>Values & mottos</h2>
+            <h3 style="font-size:13px;font-weight:500;margin:14px 0 8px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px">Family values</h3>
+            <p style="font-size:12px;color:var(--text-secondary);margin:0 0 10px">Define what your family stands for. Tap the emoji to change it.</p>
             <div id="values-list-wrap">${renderList()}</div>
             <div style="display:flex;gap:6px;margin-top:8px">
               <input type="text" id="m-value-new" maxlength="20" placeholder="Add a value (e.g. Resilience)" style="flex:1;padding:8px;border:0.5px solid var(--border);border-radius:var(--radius-md);font-size:13px">
               <button type="button" id="m-value-add" style="background:#0F6E56;color:white;border:none;padding:8px 14px;border-radius:var(--radius-md);font-size:13px;font-weight:500">Add</button>
             </div>
-            <p style="font-size:11px;color:var(--text-tertiary);margin:6px 0 0">An emoji will be auto-suggested; you can change it after.</p>
+
+            <h3 style="font-size:13px;font-weight:500;margin:20px 0 8px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px">Family mottos</h3>
+            <p style="font-size:12px;color:var(--text-secondary);margin:0 0 10px">Short, memorable phrases. One is shown on the picker each day, cycling daily.</p>
+            <div id="mottos-list-wrap">${renderMottosList()}</div>
+            <div style="display:flex;gap:6px;margin-top:8px">
+              <input type="text" id="m-motto-new" maxlength="60" placeholder="Add a motto (e.g. Work hard, play hard)" style="flex:1;padding:8px;border:0.5px solid var(--border);border-radius:var(--radius-md);font-size:13px">
+              <button type="button" id="m-motto-add" style="background:#0F6E56;color:white;border:none;padding:8px 14px;border-radius:var(--radius-md);font-size:13px;font-weight:500">Add</button>
+            </div>
             <div class="modal-actions">
               <button class="cancel" id="m-values-cancel">Cancel</button>
               <button class="save" id="m-values-save">Save</button>
@@ -1996,7 +2593,6 @@
         document.querySelectorAll('.value-emoji-btn').forEach(b => {
           b.onclick = () => {
             const idx = parseInt(b.dataset.idx);
-            // Inject emoji picker overlay
             const overlay = document.createElement('div');
             overlay.innerHTML = renderEmojiPicker(idx);
             $('modal-root').appendChild(overlay.firstElementChild);
@@ -2018,6 +2614,17 @@
       };
       refreshList();
 
+      const refreshMottos = () => {
+        $('mottos-list-wrap').innerHTML = renderMottosList();
+        document.querySelectorAll('.motto-remove-btn').forEach(b => {
+          b.onclick = () => {
+            mottos.splice(parseInt(b.dataset.idx), 1);
+            refreshMottos();
+          };
+        });
+      };
+      refreshMottos();
+
       $('m-value-add').onclick = () => {
         const name = ($('m-value-new').value || '').trim();
         if (!name) return;
@@ -2028,8 +2635,19 @@
         refreshList();
       };
 
+      $('m-motto-add').onclick = () => {
+        const m = ($('m-motto-new').value || '').trim();
+        if (!m) return;
+        if (mottos.length >= 10) return alert('Limit 10 mottos.');
+        if (mottos.some(x => x.toLowerCase() === m.toLowerCase())) return alert('Already in the list.');
+        mottos.push(m);
+        $('m-motto-new').value = '';
+        refreshMottos();
+      };
+
       $('m-values-save').onclick = () => {
         state.familyValues = values;
+        state.familyMottos = mottos;
         scheduleSave();
         closeModal();
         render();
@@ -2366,16 +2984,18 @@
       $('m-photo-input').onchange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        pendingPhotoFile = file;
+        const cropped = await openPhotoCropModal(file);
+        if (!cropped) return; // user cancelled
+        pendingPhotoFile = cropped;
         pendingPhotoRemove = false;
-        // Preview
-        const reader = new FileReader();
-        reader.onload = () => {
-          $('m-photo-preview').style.backgroundImage = `url('${reader.result}')`;
-          $('m-photo-preview').textContent = '';
-          $('m-photo-preview').style.background = `url('${reader.result}') center / cover`;
-        };
-        reader.readAsDataURL(file);
+        // Update preview to the cropped result
+        const previewUrl = URL.createObjectURL(cropped);
+        const prev = $('m-photo-preview');
+        if (prev) {
+          prev.style.backgroundImage = `url('${previewUrl}')`;
+          prev.textContent = '';
+          prev.style.background = `url('${previewUrl}') center / cover`;
+        }
       };
 
       const removeBtn = $('m-photo-remove');
@@ -2491,11 +3111,42 @@
       document.querySelectorAll('.nav-btn').forEach(b => {
         b.onclick = () => {
           ensureAudio();
-          view = b.dataset.view === 'parent' ? 'parent' : 'picker';
+          const targetView = b.dataset.view;
+          if (targetView === 'parent' && !parentUnlocked) {
+            if (!state.parentPin) {
+              openPinSetupModal();
+            } else {
+              openPinEntryModal();
+            }
+            return;
+          }
+          if (targetView === 'dev' && !devTabUnlocked) return; // shouldn't be possible to click but guard anyway
+          view = targetView;
           activeKid = null;
           render();
         };
       });
+
+      // Dev tab handlers
+      document.querySelectorAll('.dev-action-btn').forEach(b => {
+        b.onclick = () => {
+          const action = b.dataset.action;
+          if (action === 'seed-week') {
+            seedTestData('week');
+          } else if (action === 'seed-bonuses') {
+            seedTestData('bonuses');
+          } else {
+            runDevAction(action);
+          }
+        };
+      });
+      const exp = $('dev-export-btn');
+      if (exp) exp.onclick = exportStateAsJSON;
+      const imp = $('dev-import-btn');
+      if (imp) imp.onclick = importStateFromJSON;
+
+      const cpBtn = $('change-pin-btn');
+      if (cpBtn) cpBtn.onclick = () => openChangePinModal();
       document.querySelectorAll('.kid-tile').forEach(b => {
         b.onclick = () => {
           ensureAudio();
@@ -2885,15 +3536,20 @@
     // ---------- Auth flow ----------
     onAuthStateChanged(auth, async (user) => {
       $('loading').style.display = 'none';
+      // Always reset session locks when auth changes
+      parentUnlocked = false;
+      devTabUnlocked = false;
       if (user) {
         $('login-screen').style.display = 'none';
         $('app').style.display = 'block';
+        $('version-footer').style.display = 'block';
         await loadState(user);
         startListening();
         render();
       } else {
         $('login-screen').style.display = 'flex';
         $('app').style.display = 'none';
+        $('version-footer').style.display = 'none';
         if (unsubscribe) { unsubscribe(); unsubscribe = null; }
       }
     });
@@ -2927,6 +3583,30 @@
         navigator.serviceWorker.register('./service-worker.js').catch(console.warn);
       });
     }
+
+    // Easter egg: tap version footer 7 times within 4 seconds to reveal Dev tab
+    (function setupDevUnlock() {
+      const f = $('version-footer');
+      if (!f) return;
+      let taps = 0;
+      let timer = null;
+      f.addEventListener('click', () => {
+        taps++;
+        clearTimeout(timer);
+        timer = setTimeout(() => { taps = 0; }, 4000);
+        if (taps >= 7) {
+          taps = 0;
+          // Require PIN unlock first
+          if (!parentUnlocked) {
+            alert('Unlock Parent CFO first, then tap 7 times again to reveal Dev tab.');
+            return;
+          }
+          devTabUnlocked = true;
+          alert('Dev tab unlocked for this session.');
+          render();
+        }
+      });
+    })();
   </script>
 </body>
 </html>
