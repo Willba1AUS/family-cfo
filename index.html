@@ -32,7 +32,6 @@
       --radius-md: 8px;
       --radius-lg: 12px;
       --radius-xl: 16px;
-      --app-zoom: 1;
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body {
@@ -1279,41 +1278,11 @@
 
         ${renderChoreManagement()}
 
-        ${renderDisplaySettings()}
-
         <div class="manager-note">
           <i class="ti ti-sparkles" style="font-size:20px;flex-shrink:0;margin-top:2px"></i>
           <div>
             <p style="font-size:13px;font-weight:500;margin:0">Manager's note</p>
             <p style="font-size:12px;margin:4px 0 0;line-height:1.5">${note}</p>
-          </div>
-        </div>
-      `;
-    }
-
-    // ---------- Display settings (text scale, per-device) ----------
-    function getTextScale() {
-      return localStorage.getItem('text-scale') || 'standard';
-    }
-    function applyTextScale(scale) {
-      // No-op for now — text scale temporarily disabled while we sort browser-compat issues.
-      // Will revisit with a proper REM-based approach.
-      localStorage.setItem('text-scale', scale);
-    }
-
-    function renderDisplaySettings() {
-      const cur = getTextScale();
-      const scales = [
-        { id: 'compact', label: 'Compact' },
-        { id: 'standard', label: 'Standard' },
-        { id: 'large', label: 'Large' },
-      ];
-      return `
-        <div class="card">
-          <p style="font-size:14px;font-weight:500;margin:0 0 8px"><i class="ti ti-text-size" style="font-size:16px;vertical-align:-2px"></i> Display size</p>
-          <p style="font-size:11px;color:var(--text-secondary);margin:0 0 10px">Affects only this device. Each device remembers its own setting.</p>
-          <div class="mode-toggle">
-            ${scales.map(s => `<button type="button" class="mode-toggle-btn text-scale-btn ${cur === s.id ? 'active' : ''}" data-scale="${s.id}">${s.label}</button>`).join('')}
           </div>
         </div>
       `;
@@ -2141,14 +2110,6 @@
       // Spend jar tap-through (kid view)
       const spendJar = $('spend-jar-action');
       if (spendJar) spendJar.onclick = () => openSpendModal(activeKid);
-
-      // Text scale buttons
-      document.querySelectorAll('.text-scale-btn').forEach(b => {
-        b.onclick = () => {
-          applyTextScale(b.dataset.scale);
-          render();
-        };
-      });
     }
 
     // ---------- Save transfer modal ----------
@@ -2294,9 +2255,6 @@
     }
 
     // ---------- Auth flow ----------
-    // Apply saved text scale on boot (before any render)
-    applyTextScale(getTextScale());
-
     onAuthStateChanged(auth, async (user) => {
       $('loading').style.display = 'none';
       if (user) {
