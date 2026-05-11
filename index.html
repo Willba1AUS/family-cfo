@@ -236,15 +236,6 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .chore-meta { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
-    .audio-btn {
-      border: none;
-      width: 26px; height: 26px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-      transition: transform 0.15s ease;
-    }
-    .audio-btn:active { transform: scale(0.9); }
-    .audio-btn.speaking { background: var(--info-bg) !important; }
 
     /* Day cells */
     .day-cell {
@@ -355,23 +346,6 @@
       padding: 1rem 1.25rem;
       display: flex; gap: 12px; align-items: flex-start;
       color: var(--info-text);
-    }
-
-    /* Voice picker */
-    .voice-row {
-      display: flex; align-items: center; gap: 10px;
-      margin-bottom: 1rem; flex-wrap: wrap;
-      font-size: 12px; color: var(--text-secondary);
-    }
-    .voice-row select {
-      font-size: 12px; padding: 5px 8px;
-      border-radius: var(--radius-md); border: 0.5px solid var(--border);
-      background: var(--bg-primary); max-width: 280px;
-    }
-    .voice-row button {
-      border: 0.5px solid var(--border); background: var(--bg-primary);
-      padding: 5px 10px; border-radius: var(--radius-md);
-      font-size: 11px;
     }
 
     /* Loading */
@@ -532,12 +506,10 @@
     }
     .action-prompt:last-child { border-bottom: none; }
 
-    /* Value pills (kid view) */
+    /* Value pills (kid view) — display only */
     .value-pill {
-      cursor: pointer;
       transition: transform 0.15s;
     }
-    .value-pill:active { transform: scale(0.95); }
 
     /* Bonus celebration animations */
     @keyframes fadeIn {
@@ -589,7 +561,7 @@
   </div>
   <div id="app" style="display: none;"></div>
   <div id="modal-root"></div>
-  <div id="version-footer" style="text-align:center;font-size:10px;color:rgba(0,0,0,0.3);padding:8px;cursor:pointer;user-select:none;display:none">Family CFO · v7</div>
+  <div id="version-footer" style="text-align:center;font-size:10px;color:rgba(0,0,0,0.3);padding:8px;cursor:pointer;user-select:none;display:none">Family CFO · v8</div>
 
   <!-- Firebase v10 (modular) via CDN -->
   <script type="module">
@@ -635,7 +607,7 @@
     const DEFAULT_STATE = {
       kids: {
         rafa: {
-          name: 'Rafa', age: 4, avatar: 'R', mode: 'pre-reader',
+          name: 'Rafa', age: 4, avatar: 'R', mode: 'learning',
           textColor: '#993C1D', bgColor: '#FAECE7', accentColor: '#D85A30',
           spend: 0, save: 0, give: 0,
           spendHistory: [], saveHistory: [], giveHistory: [], bonusHistory: [],
@@ -942,9 +914,6 @@
     // ---------- Audio (Mario coin + chimes) ----------
     let audioCtx = null;
     let soundOn = true;
-    let chosenVoice = null;
-    let allVoices = [];
-    let ttsWarmedUp = false;
 
     function ensureAudio() {
       if (!audioCtx) {
@@ -952,15 +921,6 @@
         catch (e) { return null; }
       }
       if (audioCtx.state === 'suspended') audioCtx.resume();
-      // First-touch TTS warmup: fire a silent utterance to wake the engine
-      if (!ttsWarmedUp && 'speechSynthesis' in window) {
-        ttsWarmedUp = true;
-        try {
-          const u = new SpeechSynthesisUtterance(' ');
-          u.volume = 0; u.rate = 1; u.pitch = 1;
-          window.speechSynthesis.speak(u);
-        } catch (e) {}
-      }
       return audioCtx;
     }
 
@@ -1027,92 +987,6 @@
       });
     }
 
-    // ---------- TTS ----------
-    function rankVoice(v) {
-      const name = v.name.toLowerCase();
-      const lang = (v.lang || '').toLowerCase();
-      let score = 0;
-      if (lang.includes('en-au') || lang.includes('en_au')) score += 100;
-      else if (lang.startsWith('en')) score += 20;
-      if (name.includes('network')) score += 30;
-      if (name.includes('neural')) score += 30;
-      if (name.includes('wavenet')) score += 35;
-      if (name.includes('google') && (lang.includes('en-au') || name.includes('australia'))) score += 25;
-      if (/-au[a-z]?-x-aua/i.test(v.name) || /-au[a-z]?-x-auc/i.test(v.name)) score += 15;
-      if (name.includes('female')) score += 20;
-      if (name.includes('karen') || name.includes('catherine') || name.includes('lisa')) score += 15;
-      if (name.includes('male') && !name.includes('female')) score -= 15;
-      if (/-au[a-z]?-x-aub/i.test(v.name) || /-au[a-z]?-x-aud/i.test(v.name)) score -= 10;
-      return score;
-    }
-
-    function loadAllVoices() {
-      if (!('speechSynthesis' in window)) return [];
-      const voices = window.speechSynthesis.getVoices();
-      return voices
-        .filter(v => /^en/i.test(v.lang))
-        .map(v => ({ voice: v, score: rankVoice(v) }))
-        .sort((a, b) => b.score - a.score)
-        .map(x => x.voice);
-    }
-
-    function speak(text, btnEl) {
-      if (!soundOn) return;
-      if (!('speechSynthesis' in window)) return;
-      if (!chosenVoice) {
-        const list = loadAllVoices();
-        chosenVoice = list[0] || null;
-        const savedName = localStorage.getItem('voice-name');
-        if (savedName) {
-          const v = list.find(v => v.name === savedName);
-          if (v) chosenVoice = v;
-        }
-      }
-
-      const synth = window.speechSynthesis;
-
-      // Anti-cutoff: Chrome/Android sometimes goes "paused" after idle. Resume.
-      try { synth.resume(); } catch (e) {}
-
-      // Cancel any in-flight speech, then wait briefly so the cancel actually settles
-      // before we queue the new utterance. Without this delay, Android Chrome
-      // often eats the new utterance entirely or cuts it off mid-word.
-      synth.cancel();
-
-      setTimeout(() => {
-        try { synth.resume(); } catch (e) {}
-        const u = new SpeechSynthesisUtterance(text);
-        if (chosenVoice) { u.voice = chosenVoice; u.lang = chosenVoice.lang; }
-        else u.lang = 'en-AU';
-        u.rate = 0.9;     // slightly slower = less likely to be truncated
-        u.pitch = 1.0;
-        u.volume = 1;
-        if (btnEl) {
-          btnEl.classList.add('speaking');
-          u.onend = () => btnEl.classList.remove('speaking');
-          u.onerror = () => btnEl.classList.remove('speaking');
-        }
-        // Heartbeat: Chrome bug where speech pauses after ~14s. We send pause/resume
-        // pulses every 10s as long as speech is active.
-        const heartbeat = setInterval(() => {
-          if (!synth.speaking) { clearInterval(heartbeat); return; }
-          try { synth.pause(); synth.resume(); } catch (e) {}
-        }, 10000);
-        const cleanup = () => clearInterval(heartbeat);
-        u.addEventListener('end', cleanup);
-        u.addEventListener('error', cleanup);
-
-        synth.speak(u);
-      }, 80);
-    }
-
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.onvoiceschanged = () => {
-        allVoices = loadAllVoices();
-        renderVoicePicker();
-      };
-    }
-
     // ---------- Firestore data layer ----------
     function familyDocRef() {
       return doc(db, 'families', FAMILY_ID);
@@ -1151,6 +1025,8 @@
         if (!kid.bonusHistory) kid.bonusHistory = [];
         if (!kid.goal) kid.goal = { enabled: false, name: '', target: 0, matchRatio: 1 };
         if (!kid.tapSize) kid.tapSize = (kid.mode === 'pre-reader' ? 'big' : 'standard');
+        // Migrate pre-reader → learning (TTS removed)
+        if (kid.mode === 'pre-reader') kid.mode = 'learning';
         (kid.chores || []).forEach(c => {
           if (c.paid === undefined) c.paid = (c.amount > 0);
           if (!c.category) c.category = c.paid ? 'extras' : 'routines';
@@ -1271,17 +1147,6 @@
         </div>
       `;
 
-      // Voice picker (only on kids view, only if pre-reader kid is active)
-      if (view === 'kid' && activeKid && state.kids[activeKid].mode === 'pre-reader') {
-        body += `
-          <div class="voice-row">
-            <span><i class="ti ti-microphone" style="font-size:13px"></i> Voice:</span>
-            <select id="voice-select"></select>
-            <button id="test-voice">Test</button>
-          </div>
-        `;
-      }
-
       if (view === 'parent') body += renderParent(tIdx);
       else if (view === 'dev' && devTabUnlocked) body += renderDevTab();
       else if (view === 'kid' && activeKid) body += renderKid(activeKid, tIdx);
@@ -1289,9 +1154,6 @@
 
       root.innerHTML = body;
       attachHandlers();
-      if (view === 'kid' && activeKid && state.kids[activeKid].mode === 'pre-reader') {
-        renderVoicePicker();
-      }
       // Auto-scroll the grid horizontally so today is visible
       if (view === 'kid' && activeKid) {
         const scroll = document.querySelector('.grid-scroll');
@@ -1315,14 +1177,13 @@
     function showBonusCelebration(kid, unviewedBonuses) {
       // Take the most recent unviewed bonus to highlight, mark all as viewed
       const latest = unviewedBonuses[unviewedBonuses.length - 1];
-      const isPre = kid.mode === 'pre-reader';
       const others = unviewedBonuses.length - 1;
 
       $('modal-root').innerHTML = `
         <div class="modal-backdrop" id="celebrate-backdrop" style="background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);animation:fadeIn 0.3s ease">
           <div class="modal celebrate-modal" style="max-width:420px;text-align:center;padding:2rem 1.5rem;background:${kid.bgColor};animation:popIn 0.4s ease">
             <div style="font-size:80px;line-height:1;margin-bottom:8px;animation:bounce 0.6s ease 0.2s">${latest.emoji || '⭐'}</div>
-            <p style="font-size:14px;font-weight:500;margin:0;color:${kid.textColor};opacity:0.7;text-transform:uppercase;letter-spacing:1px">${isPre ? 'You showed' : 'You earned'}</p>
+            <p style="font-size:14px;font-weight:500;margin:0;color:${kid.textColor};opacity:0.7;text-transform:uppercase;letter-spacing:1px">You earned</p>
             <p style="font-size:36px;font-weight:600;margin:6px 0;color:${kid.textColor}">${latest.value || 'Bonus'}</p>
             <p style="font-size:15px;margin:0;color:${kid.textColor};opacity:0.85;line-height:1.4">"${latest.reason}"</p>
             <p style="font-size:24px;font-weight:500;margin:16px 0 0;color:${kid.textColor}">+${fmt(latest.amount)}</p>
@@ -1336,11 +1197,7 @@
       unviewedBonuses.forEach(b => { b.unviewed = false; });
       scheduleSave();
 
-      // Play fanfare + speak the value name
       playBonusFanfare();
-      if (isPre && latest.value) {
-        setTimeout(() => speak(`You showed ${latest.value}!`), 600);
-      }
 
       $('celebrate-close').onclick = () => {
         closeModal();
@@ -1382,7 +1239,7 @@
               const ringColor = allDone ? '#0F6E56' : k.accentColor;
               const hasUnviewedBonus = (k.bonusHistory || []).some(b => b.unviewed);
               return `
-              <button class="kid-tile" data-kid="${id}" data-greeting="Hi ${k.name}!" style="background:${k.bgColor};position:relative">
+              <button class="kid-tile" data-kid="${id}" style="background:${k.bgColor};position:relative">
                 <div class="kid-avatar-wrap" style="position:relative;display:inline-block">
                   <svg width="120" height="120" style="display:block;transform:rotate(-90deg)" aria-hidden="true">
                     <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="6"/>
@@ -1512,7 +1369,6 @@
 
     function renderKid(kidId, tIdx) {
       const k = state.kids[kidId];
-      const isPre = k.mode === 'pre-reader';
       const total = (k.spend || 0) + (k.save || 0) + (k.give || 0);
       const hasPhoto = !!k.photoURL;
       const headerAvatarStyle = hasPhoto
@@ -1529,51 +1385,50 @@
           </div>
           <button class="back-btn" id="back-btn" style="color:${k.textColor};border-color:${k.accentColor}">← Switch</button>
         </div>
-        ${renderJars(k, isPre)}
+        ${renderJars(k)}
         <div style="margin-top:1.5rem">
           <div style="display:flex;align-items:baseline;justify-content:space-between;margin:0 0 12px">
-            <p style="font-size:${isPre ? '17' : '15'}px;font-weight:500;margin:0">${isPre ? '🌟 This week' : 'This week'}</p>
-            <p style="font-size:12px;color:var(--text-secondary);margin:0">${isPre ? 'Tap 🔊 to hear · tap a box to mark done' : 'Tap today or yesterday to mark done'}</p>
+            <p style="font-size:15px;font-weight:500;margin:0">This week</p>
+            <p style="font-size:12px;color:var(--text-secondary);margin:0">Tap today or yesterday to mark done</p>
           </div>
-          ${renderChoreGrid(k, isPre, tIdx)}
+          ${renderChoreGrid(k, tIdx)}
         </div>
-        ${renderKidRecentValues(k, isPre)}
-        ${renderKidFamilyValues(isPre)}
+        ${renderKidRecentValues(k)}
+        ${renderKidFamilyValues()}
       `;
     }
 
-    function renderKidFamilyValues(isPre) {
+    function renderKidFamilyValues() {
       const values = state.familyValues || [];
       if (values.length === 0) return '';
       return `
         <div class="card" style="margin-top:1rem">
-          <p style="font-size:${isPre ? '15' : '13'}px;font-weight:500;margin:0 0 8px">${isPre ? '✨ Our family values' : 'Our family values'}</p>
+          <p style="font-size:13px;font-weight:500;margin:0 0 8px">Our family values</p>
           <div style="display:flex;flex-wrap:wrap;gap:8px">
             ${values.map(v => `
-              <button type="button" class="value-pill ${isPre ? 'value-pill-pre' : ''}" data-value-name="${v.name.replace(/"/g, '&quot;')}" style="display:flex;align-items:center;gap:6px;padding:${isPre ? '10px 14px' : '6px 10px'};border:0.5px solid var(--border);background:var(--bg-secondary);border-radius:999px;font-size:${isPre ? '15' : '12'}px">
-                <span style="font-size:${isPre ? '22' : '16'}px">${v.emoji || '⭐'}</span>
+              <span class="value-pill" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:0.5px solid var(--border);background:var(--bg-secondary);border-radius:999px;font-size:12px">
+                <span style="font-size:16px">${v.emoji || '⭐'}</span>
                 <span>${v.name}</span>
-              </button>
+              </span>
             `).join('')}
           </div>
-          ${isPre ? '<p style="font-size:11px;color:var(--text-secondary);margin:8px 0 0">Tap to hear</p>' : ''}
         </div>
       `;
     }
 
-    function renderKidRecentValues(k, isPre) {
+    function renderKidRecentValues(k) {
       const recent = (k.bonusHistory || []).filter(b => b.value).slice(-5).reverse();
       if (recent.length === 0) return '';
       return `
         <div class="card" style="margin-top:1rem">
-          <p style="font-size:${isPre ? '15' : '13'}px;font-weight:500;margin:0 0 8px">${isPre ? '🌟 What you have shown' : `${k.name}'s recent moments`}</p>
+          <p style="font-size:13px;font-weight:500;margin:0 0 8px">${k.name}'s recent moments</p>
           <div style="display:flex;flex-direction:column;gap:8px">
             ${recent.map(b => `
-              <div style="display:flex;align-items:center;gap:10px;padding:${isPre ? '10px' : '8px'};background:var(--bg-secondary);border-radius:var(--radius-md)">
-                <span style="font-size:${isPre ? '28' : '20'}px">${b.emoji || '⭐'}</span>
+              <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+                <span style="font-size:20px">${b.emoji || '⭐'}</span>
                 <div style="flex:1;min-width:0">
-                  <p style="font-size:${isPre ? '14' : '12'}px;font-weight:500;margin:0">${b.value}</p>
-                  <p style="font-size:${isPre ? '12' : '11'}px;color:var(--text-secondary);margin:2px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.reason}</p>
+                  <p style="font-size:12px;font-weight:500;margin:0">${b.value}</p>
+                  <p style="font-size:11px;color:var(--text-secondary);margin:2px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.reason}</p>
                 </div>
                 <p style="font-size:11px;color:var(--text-tertiary);margin:0;flex-shrink:0">${formatDateShort(b.date)}</p>
               </div>
@@ -1594,14 +1449,13 @@
       return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
     }
 
-    function renderJars(k, isPre) {
+    function renderJars(k) {
       const jars = [
         { name: 'Spend', amount: k.spend || 0, color: '#378ADD', bgColor: '#E6F1FB', icon: 'ti-shopping-cart', pct: 70, action: 'spend' },
         { name: 'Save',  amount: k.save  || 0, color: '#1D9E75', bgColor: '#E1F5EE', icon: 'ti-pig-money',     pct: 20 },
         { name: 'Give',  amount: k.give  || 0, color: '#D4537E', bgColor: '#FBEAF0', icon: 'ti-heart',         pct: 10 },
       ];
       const maxJar = Math.max(...jars.map(j => j.amount), 10);
-      // Goal overlay info for Save jar
       const goal = k.goal || {};
       const showGoal = goal.enabled && goal.target > 0;
       return `
@@ -1611,16 +1465,16 @@
             const isSpendActionable = j.action === 'spend' && (k.spend || 0) > 0;
             const idAttr = isSpendActionable ? 'id="spend-jar-action"' : '';
             const cursorStyle = isSpendActionable ? 'cursor:pointer' : '';
-            const canSpendHint = isSpendActionable && !isPre ? `<p style="font-size:9px;margin:2px 0 0;color:${j.color};opacity:0.7">tap to spend</p>` : '';
+            const canSpendHint = isSpendActionable ? `<p style="font-size:9px;margin:2px 0 0;color:${j.color};opacity:0.7">tap to spend</p>` : '';
             return `
               <div class="jar" ${idAttr} style="background:${j.bgColor};${cursorStyle}">
-                <div class="jar-glass" style="width:${isPre ? 60 : 50}px;height:${isPre ? 72 : 60}px;border-color:${j.color};border-width:3px">
+                <div class="jar-glass" style="width:50px;height:60px;border-color:${j.color};border-width:3px">
                   <div class="jar-fill" style="background:${j.color};height:${fillH}%"></div>
-                  <i class="ti ${j.icon} jar-icon" style="font-size:${isPre ? 24 : 20}px;color:${j.color}"></i>
+                  <i class="ti ${j.icon} jar-icon" style="font-size:20px;color:${j.color}"></i>
                 </div>
-                <p style="font-size:${isPre ? '15' : '12'}px;font-weight:500;margin:0;color:${j.color}">${j.name}</p>
-                <p style="font-size:${isPre ? '18' : '16'}px;font-weight:500;margin:2px 0 0;color:${j.color}">${fmt(j.amount)}</p>
-                ${!isPre ? `<p style="font-size:10px;margin:2px 0 0;color:${j.color};opacity:0.7">${j.pct}%</p>` : ''}
+                <p style="font-size:12px;font-weight:500;margin:0;color:${j.color}">${j.name}</p>
+                <p style="font-size:16px;font-weight:500;margin:2px 0 0;color:${j.color}">${fmt(j.amount)}</p>
+                <p style="font-size:10px;margin:2px 0 0;color:${j.color};opacity:0.7">${j.pct}%</p>
                 ${canSpendHint}
               </div>
             `;
@@ -1649,12 +1503,12 @@
       `;
     }
 
-    function renderChoreGrid(k, isPre, tIdx) {
+    function renderChoreGrid(k, tIdx) {
       const chores = k.chores || [];
       const routines = chores.filter(c => !c.paid);
       const extras = chores.filter(c => c.paid);
-      // Effective tap size: explicit override wins, else pre-reader → big, else standard
-      const tapSize = k.tapSize || (isPre ? 'big' : 'standard');
+      // Effective tap size: explicit override wins, else standard
+      const tapSize = k.tapSize || 'standard';
       const tapClass = tapSize === 'big' ? 'tap-big'
                      : tapSize === 'extra-big' ? 'tap-extra-big'
                      : tapSize === 'huge' ? 'tap-huge'
@@ -1676,18 +1530,18 @@
           <div class="grid-scroll">
             ${headerRow}
             ${routines.length ? sectionHeader('🌟 Routines', 'being part of the family') : ''}
-            ${routines.map(c => renderChoreRow(c, k, isPre, tIdx)).join('')}
+            ${routines.map(c => renderChoreRow(c, k, tIdx)).join('')}
             ${extras.length ? sectionHeader('💼 Paid jobs', `extras you can earn money on`) : ''}
-            ${extras.map(c => renderChoreRow(c, k, isPre, tIdx)).join('')}
+            ${extras.map(c => renderChoreRow(c, k, tIdx)).join('')}
           </div>
         </div>
       `;
     }
 
-    function renderChoreRow(c, k, isPre, tIdx) {
-      const iconCircle = isPre ? 42 : 30;
-      const iconSize = isPre ? 24 : 16;
-      const titleSize = isPre ? 15 : 13;
+    function renderChoreRow(c, k, tIdx) {
+      const iconCircle = 30;
+      const iconSize = 16;
+      const titleSize = 13;
       const history = c.history || [];
       const moneyLabel = c.paid
         ? `<span style="font-size:11px;color:var(--text-secondary)">${fmt(c.amount)}</span>`
@@ -1699,10 +1553,7 @@
               <i class="ti ${c.icon}" style="font-size:${iconSize}px;color:${k.textColor}"></i>
             </div>
             <div style="min-width:0;flex:1">
-              <div style="display:flex;align-items:center;gap:6px">
-                <p class="chore-title" style="font-size:${titleSize}px">${c.title}${c.hardWork ? ' 💪' : ''}${c.schoolReady ? ' 🎒' : ''}</p>
-                ${isPre ? `<button class="audio-btn" data-text="${c.title.replace(/"/g, '&quot;')}" style="background:${k.bgColor};color:${k.textColor}" aria-label="Hear chore name"><i class="ti ti-volume" style="font-size:14px"></i></button>` : ''}
-              </div>
+              <p class="chore-title" style="font-size:${titleSize}px">${c.title}${c.hardWork ? ' 💪' : ''}${c.schoolReady ? ' 🎒' : ''}</p>
               <div class="chore-meta">
                 ${moneyLabel}
                 ${(c.streak || 0) >= 3 ? `<span style="font-size:11px;color:#BA7517"><i class="ti ti-flame" style="font-size:12px;vertical-align:-1px"></i> ${c.streak}</span>` : ''}
@@ -2864,7 +2715,6 @@
         ? `background-image:url('${k.photoURL}')`
         : `background:${k.bgColor};color:${k.textColor}`;
       const modes = [
-        { id: 'pre-reader', label: 'Pre-reader' },
         { id: 'learning', label: 'Learning' },
         { id: 'independent', label: 'Independent' },
       ];
@@ -2885,7 +2735,7 @@
               <div class="mode-toggle">
                 ${modes.map(m => `<button type="button" class="mode-toggle-btn ${k.mode === m.id ? 'active' : ''}" data-mode="${m.id}">${m.label}</button>`).join('')}
               </div>
-              <p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0">Pre-reader shows big icons + voice button. Independent is the standard view.</p>
+              <p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0">Currently a labelling field only — tap-target sizing is set separately below.</p>
             </div>
             <div class="form-row">
               <label>Tap-target size</label>
@@ -2895,7 +2745,7 @@
                 <button type="button" class="mode-toggle-btn tap-size-btn ${k.tapSize === 'extra-big' ? 'active' : ''}" data-size="extra-big">XL</button>
                 <button type="button" class="mode-toggle-btn tap-size-btn ${k.tapSize === 'huge' ? 'active' : ''}" data-size="huge">Huge</button>
               </div>
-              <p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0">Bigger tap targets help young fingers. Pre-reader mode auto-uses Big unless you override here.</p>
+              <p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0">Bigger tap targets help young fingers.</p>
             </div>
             <div class="form-row">
               <label>Photo</label>
@@ -3077,26 +2927,6 @@
       return insights.slice(0, 2).join('. ') + '.';
     }
 
-    function renderVoicePicker() {
-      const select = $('voice-select');
-      if (!select) return;
-      if (!allVoices.length) allVoices = loadAllVoices();
-      if (!allVoices.length) {
-        select.innerHTML = '<option>Loading voices…</option>';
-        return;
-      }
-      if (!chosenVoice && allVoices.length) {
-        const savedName = localStorage.getItem('voice-name');
-        chosenVoice = (savedName && allVoices.find(v => v.name === savedName)) || allVoices[0];
-      }
-      select.innerHTML = allVoices.map((v, i) => {
-        const isAussie = /en[-_]?au/i.test(v.lang);
-        const flag = isAussie ? '🇦🇺 ' : '';
-        const sel = chosenVoice && v.name === chosenVoice.name ? 'selected' : '';
-        return `<option value="${i}" ${sel}>${flag}${v.name} (${v.lang})</option>`;
-      }).join('');
-    }
-
     // ---------- Burst animation ----------
     function showBurst(x, y, color) {
       const el = document.createElement('div');
@@ -3150,8 +2980,6 @@
       document.querySelectorAll('.kid-tile').forEach(b => {
         b.onclick = () => {
           ensureAudio();
-          // 250ms delay lets TTS engine warm + cancel-from-prev-utterance settle
-          setTimeout(() => speak(b.dataset.greeting), 250);
           activeKid = b.dataset.kid;
           view = 'kid';
           render();
@@ -3159,22 +2987,6 @@
       });
       const back = $('back-btn');
       if (back) back.onclick = () => { view = 'picker'; activeKid = null; render(); };
-
-      document.querySelectorAll('.audio-btn').forEach(b => {
-        b.onclick = (e) => {
-          e.stopPropagation();
-          ensureAudio();
-          speak(b.dataset.text, b);
-        };
-      });
-
-      // Value pills — all kids get TTS playback on tap
-      document.querySelectorAll('.value-pill').forEach(b => {
-        b.onclick = () => {
-          ensureAudio();
-          speak(b.dataset.valueName);
-        };
-      });
 
       document.querySelectorAll('.day-cell.tickable').forEach(cell => {
         cell.onclick = () => {
@@ -3280,30 +3092,15 @@
         };
       });
 
-      // Sound + signout + voice
+      // Sound + signout
       const sb = $('sound-toggle');
       if (sb) sb.onclick = () => {
         soundOn = !soundOn;
         if (soundOn) ensureAudio();
-        else if (window.speechSynthesis) window.speechSynthesis.cancel();
         sb.querySelector('i').className = soundOn ? 'ti ti-volume' : 'ti ti-volume-off';
       };
       const so = $('signout-btn');
       if (so) so.onclick = () => signOut(auth);
-
-      const vs = $('voice-select');
-      if (vs) {
-        vs.onchange = () => {
-          const i = parseInt(vs.value);
-          if (allVoices[i]) {
-            chosenVoice = allVoices[i];
-            localStorage.setItem('voice-name', chosenVoice.name);
-            speak('Hi, this is your test voice.');
-          }
-        };
-      }
-      const tv = $('test-voice');
-      if (tv) tv.onclick = () => { ensureAudio(); speak('Hi! Time to do your chores.'); };
 
       // Chore management
       const addBtn = $('add-chore-btn');
