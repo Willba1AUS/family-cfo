@@ -561,7 +561,7 @@
   </div>
   <div id="app" style="display: none;"></div>
   <div id="modal-root"></div>
-  <div id="version-footer" style="text-align:center;font-size:10px;color:rgba(0,0,0,0.3);padding:8px;cursor:pointer;user-select:none;display:none">Family CFO · v8</div>
+  <div id="version-footer" style="text-align:center;font-size:10px;color:rgba(0,0,0,0.3);padding:8px;cursor:pointer;user-select:none;display:none">Family CFO · v9</div>
 
   <!-- Firebase v10 (modular) via CDN -->
   <script type="module">
@@ -907,6 +907,7 @@
     let activeKid = null;
     let parentUnlocked = false; // Session-only — must enter PIN each time app opens to access Parent CFO
     let devTabUnlocked = false; // Hidden dev tab — unlocked via easter egg tap pattern
+    let kidWeekView = false; // Session-only — kid view defaults to Today, can toggle to Week
     let unsubscribe = null;
     let saveTimer = null;
     let isOnline = navigator.onLine;
@@ -1275,30 +1276,21 @@
         });
       });
 
-      // Weekly inflow into jars (from history)
+      // Weekly inflow: sum directly from history records
       const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - tIdx); weekStart.setHours(0,0,0,0);
       const weekStartISO = weekStart.toISOString().slice(0, 10);
-      let weeklyEarnings = 0;
-      Object.values(state.kids).forEach(k => {
-        ['saveHistory','giveHistory'].forEach(field => {
-          (k[field] || []).forEach(h => {
-            if (h.type === 'in' && h.date >= weekStartISO) weeklyEarnings += h.amount;
-          });
-        });
-      });
-      // saveHistory has 20% of earnings, giveHistory has 10%, so total earnings = (save+give) / 0.3 ... but simpler: track sum of all bonus.amount + chore approved this week
-      // Actually a cleaner approach: sum from bonusHistory + recompute approved chore earnings
+
+      // Sum: bonuses awarded this week + paid chores marked done this week
       let actualEarned = 0;
       Object.values(state.kids).forEach(k => {
-        (k.bonusHistory || []).forEach(b => { if (b.date >= weekStartISO) actualEarned += b.amount; });
-        // approved chores: walk chore history but we don't store approval-date per chore tick; use saveHistory*5 as proxy isn't great
-        // Simplest: weeklyEarnings approximation using saveHistory entries (since save = 20% of every earning event)
-      });
-      // Use saveHistory inflow * 5 (since save=20% of the total earned event) as best estimate
-      let estimated = 0;
-      Object.values(state.kids).forEach(k => {
-        (k.saveHistory || []).forEach(h => {
-          if (h.type === 'in' && h.date >= weekStartISO) estimated += h.amount * 5;
+        (k.bonusHistory || []).forEach(b => {
+          if (b.date >= weekStartISO) actualEarned += b.amount;
+        });
+        (k.chores || []).forEach(c => {
+          if (!c.paid) return;
+          (c.history || []).forEach(status => {
+            if (status === 'done') actualEarned += c.amount;
+          });
         });
       });
 
@@ -1338,7 +1330,7 @@
             </div>
             <div style="padding:10px;background:var(--bg-secondary);border-radius:var(--radius-md)">
               <p style="font-size:11px;color:var(--text-secondary);margin:0;text-transform:uppercase;letter-spacing:0.5px">Earned this week</p>
-              <p style="font-size:18px;font-weight:500;margin:4px 0 0;color:#0F6E56">+${fmt(estimated)}</p>
+              <p style="font-size:18px;font-weight:500;margin:4px 0 0;color:#0F6E56">+${fmt(actualEarned)}</p>
             </div>
           </div>
           ${values.length > 0 ? `
@@ -1374,24 +1366,44 @@
       const headerAvatarStyle = hasPhoto
         ? `background-image:url('${k.photoURL}')`
         : `background:${k.textColor}`;
+
+      const now = new Date();
+      const mon = new Date(now); mon.setDate(now.getDate() - tIdx);
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+      const dateShort = (d) => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+      const weekRange = `${dateShort(mon)} \u2013 ${dateShort(sun)}`;
+      const todayLabel = now.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' });
+
+      const toggleBorderColor = kidWeekView ? 'var(--info-text)' : 'var(--border)';
+      const toggleBg = kidWeekView ? 'var(--info-bg)' : 'var(--bg-primary)';
+      const toggleTextColor = kidWeekView ? 'var(--info-text)' : 'var(--text-primary)';
+      const toggleIcon = kidWeekView ? 'arrow-left' : 'calendar';
+      const toggleLabel = kidWeekView ? 'Show today' : 'Show week';
+      const headTitle = kidWeekView ? 'this week' : 'today';
+      const headSub = kidWeekView ? weekRange : todayLabel;
+      const grid = kidWeekView ? renderChoreGridWeek(k, tIdx) : renderChoreGridToday(k, tIdx);
+
       return `
         <div class="kid-header" style="background:${k.bgColor}">
           <div class="kid-header-left">
             <div class="kid-header-avatar ${hasPhoto ? 'has-photo' : ''}" style="${headerAvatarStyle}">${hasPhoto ? '' : k.avatar}</div>
             <div>
               <p style="font-size:18px;font-weight:500;margin:0;color:${k.textColor}">Hi ${k.name}!</p>
-              <p style="font-size:13px;margin:2px 0 0;color:${k.textColor};opacity:0.75">${DAY_NAMES[tIdx]} · Total earned ${fmt(total)}</p>
+              <p style="font-size:13px;margin:2px 0 0;color:${k.textColor};opacity:0.75">${DAY_NAMES[tIdx]} \u00b7 Total earned ${fmt(total)}</p>
             </div>
           </div>
-          <button class="back-btn" id="back-btn" style="color:${k.textColor};border-color:${k.accentColor}">← Switch</button>
+          <button class="back-btn" id="back-btn" style="color:${k.textColor};border-color:${k.accentColor}">\u2190 Switch</button>
         </div>
         ${renderJars(k)}
-        <div style="margin-top:1.5rem">
-          <div style="display:flex;align-items:baseline;justify-content:space-between;margin:0 0 12px">
-            <p style="font-size:15px;font-weight:500;margin:0">This week</p>
-            <p style="font-size:12px;color:var(--text-secondary);margin:0">Tap today or yesterday to mark done</p>
+        <div class="card" style="margin-top:1.5rem;padding:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div>
+              <p style="font-size:14px;font-weight:500;margin:0">${k.name} \u00b7 ${headTitle}</p>
+              <p style="font-size:11px;color:var(--text-secondary);margin:2px 0 0">${headSub}</p>
+            </div>
+            <button id="toggle-week-btn" style="display:flex;align-items:center;gap:6px;font-size:12px;padding:6px 12px;border:0.5px solid ${toggleBorderColor};background:${toggleBg};border-radius:var(--radius-md);color:${toggleTextColor};font-weight:500"><i class="ti ti-${toggleIcon}" style="font-size:14px"></i>${toggleLabel}</button>
           </div>
-          ${renderChoreGrid(k, tIdx)}
+          ${grid}
         </div>
         ${renderKidRecentValues(k)}
         ${renderKidFamilyValues()}
@@ -1499,6 +1511,169 @@
             <div style="height:100%;width:${pct}%;background:#0F6E56;transition:width 0.4s ease"></div>
           </div>
           ${goal.matchRatio > 0 ? `<p style="font-size:11px;color:var(--text-secondary);margin:6px 0 0">incl. ${goal.matchRatio}:1 match (${fmt(matched)}). Keep saving!</p>` : ''}
+        </div>
+      `;
+    }
+
+    // ===== Today view (default kid view) =====
+    function renderChoreGridToday(k, tIdx) {
+      const chores = k.chores || [];
+      const routines = chores.filter(c => !c.paid);
+      const extras = chores.filter(c => c.paid);
+      const hdr = (label) => `<p style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin:4px 0 6px">${label}</p>`;
+      return `
+        ${routines.length ? hdr('Routines') : ''}
+        ${routines.map(c => renderTodayButton(c, k, tIdx)).join('')}
+        ${extras.length ? hdr('Paid jobs') : ''}
+        ${extras.map(c => renderTodayButton(c, k, tIdx)).join('')}
+      `;
+    }
+
+    function renderTodayButton(c, k, tIdx) {
+      const status = (c.history || [])[tIdx];
+      const isScheduled = c.schedule[tIdx];
+
+      if (!isScheduled || status === 'na') {
+        return `
+          <button disabled style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:var(--bg-secondary);border:0.5px solid var(--border);border-radius:var(--radius-md);margin-bottom:8px;text-align:left;opacity:0.55;cursor:default">
+            <i class="ti ${c.icon}" style="font-size:28px;color:${k.textColor};opacity:0.5"></i>
+            <div style="flex:1">
+              <p style="font-size:14px;font-weight:500;margin:0;color:var(--text-secondary)">${c.title}</p>
+              <p style="font-size:11px;color:var(--text-tertiary);margin:0">Not scheduled today</p>
+            </div>
+          </button>
+        `;
+      }
+
+      let bg = 'var(--bg-primary)', borderC = 'var(--border)', borderW = '0.5px';
+      let titleColor = 'var(--text-primary)', subColor = 'var(--text-secondary)';
+      let subtitle = c.paid ? `${fmt(c.amount)} \u00b7 not yet today` : 'Tap to mark done';
+      let rightIcon = '<i class="ti ti-circle" style="font-size:26px;color:var(--text-tertiary)"></i>';
+      let tickable = (status === 'available' || status === 'pending');
+
+      if (status === 'done') {
+        bg = '#E1F5EE'; borderC = '#1D9E75'; borderW = '1px';
+        titleColor = '#0F6E56'; subColor = '#0F6E56';
+        const streak = (c.streak || 0) >= 3 ? ` \u00b7 \ud83d\udd25 ${c.streak}` : '';
+        subtitle = `Done${streak}`;
+        rightIcon = '<i class="ti ti-check" style="font-size:26px;color:#0F6E56"></i>';
+        tickable = false;
+      } else if (status === 'pending') {
+        bg = 'var(--warning-bg)'; borderC = 'var(--warning-text)'; borderW = '1px';
+        titleColor = '#BA7517'; subColor = '#BA7517';
+        subtitle = 'Pending parent approval';
+        rightIcon = '<i class="ti ti-clock" style="font-size:24px;color:#BA7517"></i>';
+      } else if (status === 'missed') {
+        subtitle = c.paid ? `${fmt(c.amount)} \u00b7 missed` : 'Missed';
+        rightIcon = '<i class="ti ti-x" style="font-size:24px;color:var(--text-tertiary)"></i>';
+        tickable = false;
+      }
+
+      const attrs = tickable
+        ? `class="today-tap" data-chore="${c.id}" data-day="${tIdx}"`
+        : 'disabled';
+
+      return `
+        <button ${attrs} style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:${bg};border:${borderW} solid ${borderC};border-radius:var(--radius-md);margin-bottom:8px;text-align:left">
+          <i class="ti ${c.icon}" style="font-size:28px;color:${k.textColor}"></i>
+          <div style="flex:1;min-width:0">
+            <p style="font-size:14px;font-weight:500;margin:0;color:${titleColor}">${c.title}</p>
+            <p style="font-size:11px;color:${subColor};opacity:0.85;margin:0">${subtitle}</p>
+          </div>
+          ${rightIcon}
+        </button>
+      `;
+    }
+
+    // ===== Week view (full 7-day strip per chore) =====
+    function renderChoreGridWeek(k, tIdx) {
+      const chores = k.chores || [];
+      const routines = chores.filter(c => !c.paid);
+      const extras = chores.filter(c => c.paid);
+      const hdr = (label) => `<p style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin:4px 0 6px">${label}</p>`;
+      return `
+        ${routines.length ? hdr('Routines') : ''}
+        ${routines.map(c => renderWeekRow(c, k, tIdx)).join('')}
+        ${extras.length ? hdr('Paid jobs') : ''}
+        ${extras.map(c => renderWeekRow(c, k, tIdx)).join('')}
+      `;
+    }
+
+    function renderWeekRow(c, k, tIdx) {
+      const history = c.history || [];
+      const moneyLabel = c.paid
+        ? `<span style="font-size:11px;color:var(--text-secondary)">${fmt(c.amount)}</span>`
+        : `<span style="font-size:10px;color:var(--text-tertiary);background:var(--bg-tertiary);padding:1px 6px;border-radius:8px">routine</span>`;
+      const streakLabel = (c.streak || 0) >= 3
+        ? `<span style="font-size:11px;color:#BA7517">\ud83d\udd25 ${c.streak}</span>`
+        : '';
+      return `
+        <div style="padding:10px 12px;background:var(--bg-primary);border:0.5px solid var(--border);border-radius:var(--radius-md);margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <i class="ti ${c.icon}" style="font-size:22px;color:${k.textColor}"></i>
+            <p style="font-size:13px;font-weight:500;margin:0;flex:1">${c.title}</p>
+            ${moneyLabel}
+            ${streakLabel}
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
+            ${DAYS.map((d, dIdx) => renderWeekDayCell(history[dIdx], dIdx, c, k, tIdx, d)).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderWeekDayCell(status, dIdx, chore, k, tIdx, dayLabel) {
+      const isToday = dIdx === tIdx;
+      const isYesterday = dIdx === (tIdx - 1);
+      const isFuture = dIdx > tIdx;
+      const headColor = isToday ? 'var(--info-text)' : (isFuture ? 'var(--text-tertiary)' : 'var(--text-secondary)');
+      const headWeight = isToday ? 500 : 400;
+
+      let cellBg = 'var(--bg-secondary)';
+      let cellBorder = 'none';
+      let cellOpacity = '1';
+      let cellInner = '';
+      let cellClass = '';
+
+      if (status === 'na') {
+        cellOpacity = '0.35';
+      } else if (isFuture) {
+        cellInner = '<i class="ti ti-lock" style="font-size:10px;color:var(--text-tertiary)"></i>';
+      } else if (status === 'done') {
+        cellBg = '#E1F5EE';
+        cellInner = '<i class="ti ti-check" style="font-size:14px;color:#0F6E56"></i>';
+        if (isToday) cellBorder = '1px solid var(--info-text)';
+      } else if (status === 'pending') {
+        cellBg = 'var(--warning-bg)';
+        cellBorder = '0.5px solid var(--warning-text)';
+        cellInner = '<i class="ti ti-clock" style="font-size:12px;color:#BA7517"></i>';
+        if (isToday) cellClass = 'week-tap';
+      } else if (status === 'missed') {
+        cellInner = '<i class="ti ti-x" style="font-size:12px;color:var(--text-tertiary)"></i>';
+        cellBorder = '0.5px solid var(--border)';
+        if (isYesterday) {
+          cellBorder = `1px dashed ${k.accentColor}`;
+          cellInner = `<span style="color:${k.accentColor};font-size:14px;font-weight:500">+</span>`;
+          cellClass = 'week-tap';
+        }
+      } else if (status === 'available') {
+        if (isToday) {
+          cellBg = 'var(--bg-primary)';
+          cellBorder = '1px solid var(--info-text)';
+          cellClass = 'week-tap';
+        } else if (isYesterday) {
+          cellBg = 'var(--bg-primary)';
+          cellBorder = `1px dashed ${k.accentColor}`;
+          cellInner = `<span style="color:${k.accentColor};font-size:14px;font-weight:500">+</span>`;
+          cellClass = 'week-tap';
+        }
+      }
+
+      const dataAttrs = cellClass ? `data-chore="${chore.id}" data-day="${dIdx}"` : '';
+      return `
+        <div style="text-align:center">
+          <p style="font-size:9px;color:${headColor};font-weight:${headWeight};margin:0 0 2px">${dayLabel}</p>
+          <div class="${cellClass}" ${dataAttrs} style="aspect-ratio:1;background:${cellBg};border:${cellBorder};border-radius:6px;display:flex;align-items:center;justify-content:center;opacity:${cellOpacity}">${cellInner}</div>
         </div>
       `;
     }
@@ -2953,6 +3128,7 @@
           if (targetView === 'dev' && !devTabUnlocked) return; // shouldn't be possible to click but guard anyway
           view = targetView;
           activeKid = null;
+          kidWeekView = false;
           render();
         };
       });
@@ -2982,11 +3158,12 @@
           ensureAudio();
           activeKid = b.dataset.kid;
           view = 'kid';
+          kidWeekView = false;
           render();
         };
       });
       const back = $('back-btn');
-      if (back) back.onclick = () => { view = 'picker'; activeKid = null; render(); };
+      if (back) back.onclick = () => { view = 'picker'; activeKid = null; kidWeekView = false; render(); };
 
       document.querySelectorAll('.day-cell.tickable').forEach(cell => {
         cell.onclick = () => {
@@ -3043,6 +3220,72 @@
           scheduleSave();
           render();
         };
+      });
+
+      // Today/Week toggle in kid view
+      const toggleBtn = $('toggle-week-btn');
+      if (toggleBtn) toggleBtn.onclick = () => {
+        kidWeekView = !kidWeekView;
+        render();
+      };
+
+      // Shared tick logic for new today/week buttons
+      const tickFromEl = (el) => {
+        const choreId = el.dataset.chore;
+        const dIdx = parseInt(el.dataset.day);
+        const kid = state.kids[activeKid];
+        if (!kid) return;
+        const chore = kid.chores.find(c => c.id === choreId);
+        if (!chore) return;
+        const cur = chore.history[dIdx];
+
+        if (cur === 'pending') {
+          chore.history[dIdx] = 'available';
+          const apIdx = state.pendingApprovals.findIndex(p =>
+            p.kid === activeKid && p.choreId === choreId && p.dayIdx === dIdx
+          );
+          if (apIdx >= 0) state.pendingApprovals.splice(apIdx, 1);
+          scheduleSave();
+          render();
+          return;
+        }
+        if (cur !== 'available' && cur !== 'missed') return;
+
+        if (!chore.paid) {
+          chore.history[dIdx] = 'done';
+          let streak = 0;
+          for (let i = dIdx; i >= 0; i--) {
+            if (chore.history[i] === 'done') streak++;
+            else if (chore.history[i] === 'na') continue;
+            else break;
+          }
+          chore.streak = streak;
+          playMarioCoin();
+          const r = el.getBoundingClientRect();
+          showBurst(r.left + r.width/2, r.top + r.height/2, kid.accentColor);
+          scheduleSave();
+          render();
+          return;
+        }
+
+        chore.history[dIdx] = 'pending';
+        state.pendingApprovals.push({
+          kid: activeKid, chore: chore.title, amount: chore.amount,
+          time: dIdx === todayIdx() ? 'just now' : 'yesterday',
+          dayIdx: dIdx, choreId, hardWork: chore.hardWork || false
+        });
+        playMarioCoin();
+        const r = el.getBoundingClientRect();
+        showBurst(r.left + r.width/2, r.top + r.height/2, kid.accentColor);
+        scheduleSave();
+        render();
+      };
+
+      document.querySelectorAll('.today-tap').forEach(btn => {
+        btn.onclick = () => tickFromEl(btn);
+      });
+      document.querySelectorAll('.week-tap').forEach(cell => {
+        cell.onclick = () => tickFromEl(cell);
       });
 
       document.querySelectorAll('.approve-btn').forEach(b => {
