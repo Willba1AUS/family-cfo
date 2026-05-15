@@ -1,6 +1,6 @@
 // Service worker for Family CFO PWA
 // Network-first for HTML (always fresh), cache-first for static assets
-const CACHE_NAME = 'family-cfo-v8';
+const CACHE_NAME = 'family-cfo-v9';
 
 self.addEventListener('install', (event) => {
   // Skip pre-caching — we cache as we go to avoid blocking install
@@ -39,39 +39,4 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          if (response && response.status === 200) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => caches.match(event.request).then(c => c || new Response('Offline', { status: 503 })))
-    );
-    return;
-  }
-
-  // Cache-first with background refresh for static assets
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) {
-        fetch(event.request).then(r => {
-          if (r && r.status === 200) {
-            caches.open(CACHE_NAME).then(c => c.put(event.request, r.clone()));
-          }
-        }).catch(() => {});
-        return cached;
-      }
-      return fetch(event.request).then((response) => {
-        if (response && response.status === 200) {
-          const same = url.startsWith(self.location.origin);
-          const cdn = url.includes('jsdelivr.net') || url.includes('gstatic.com');
-          if (same || cdn) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-        }
-        return response;
-      }).catch(() => new Response('', { status: 503 }));
-    })
-  );
-});
+          if (response &&
