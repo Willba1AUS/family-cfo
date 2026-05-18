@@ -561,7 +561,7 @@
   </div>
   <div id="app" style="display: none;"></div>
   <div id="modal-root"></div>
-  <div id="version-footer" style="text-align:center;font-size:10px;color:rgba(0,0,0,0.3);padding:8px;cursor:pointer;user-select:none;display:none">Family CFO · v9</div>
+  <div id="version-footer" style="text-align:center;font-size:10px;color:rgba(0,0,0,0.3);padding:8px;user-select:none;display:none">Family CFO · v10</div>
 
   <!-- Firebase v10 (modular) via CDN -->
   <script type="module">
@@ -906,7 +906,6 @@
     let view = 'picker';
     let activeKid = null;
     let parentUnlocked = false; // Session-only — must enter PIN each time app opens to access Parent CFO
-    let devTabUnlocked = false; // Hidden dev tab — unlocked via easter egg tap pattern
     let kidWeekView = false; // Session-only — kid view defaults to Today, can toggle to Week
     let unsubscribe = null;
     let saveTimer = null;
@@ -1028,6 +1027,9 @@
         if (!kid.tapSize) kid.tapSize = (kid.mode === 'pre-reader' ? 'big' : 'standard');
         // Migrate pre-reader → learning (TTS removed)
         if (kid.mode === 'pre-reader') kid.mode = 'learning';
+        // Save-it-all mode tracking
+        if (typeof kid.saveAllMode !== 'boolean') kid.saveAllMode = false;
+        if (typeof kid.saveAllWeeks !== 'number') kid.saveAllWeeks = 0;
         (kid.chores || []).forEach(c => {
           if (c.paid === undefined) c.paid = (c.amount > 0);
           if (!c.category) c.category = c.paid ? 'extras' : 'routines';
@@ -1060,6 +1062,36 @@
       }
     }
 
+    // Apply an earning event ($X) to a kid's jars, respecting their saveAllMode.
+    // Default split: 70% Spend / 20% Save / 10% Give.
+    // Save-it-all mode: 90% Save / 10% Give (no Spend; charity still honoured).
+    // Returns { spendAmt, saveAmt, giveAmt } so callers can record history with correct values.
+    function applyEarning(k, amt, noteText) {
+      const today = new Date().toISOString().slice(0,10);
+      let spendAmt, saveAmt, giveAmt;
+      if (k.saveAllMode) {
+        spendAmt = 0;
+        saveAmt = amt * 0.9;
+        giveAmt = amt * 0.1;
+      } else {
+        spendAmt = amt * 0.7;
+        saveAmt = amt * 0.2;
+        giveAmt = amt * 0.1;
+      }
+      k.spend = (k.spend || 0) + spendAmt;
+      k.save  = (k.save  || 0) + saveAmt;
+      k.give  = (k.give  || 0) + giveAmt;
+      if (saveAmt > 0) {
+        if (!k.saveHistory) k.saveHistory = [];
+        k.saveHistory.push({ date: today, amount: saveAmt, type: 'in', note: noteText });
+      }
+      if (giveAmt > 0) {
+        if (!k.giveHistory) k.giveHistory = [];
+        k.giveHistory.push({ date: today, amount: giveAmt, type: 'in', note: noteText });
+      }
+      return { spendAmt, saveAmt, giveAmt };
+    }
+
     function maybeWeeklyReset() {
       // If we've crossed into a new ISO week since last reset, clear history
       const now = new Date();
@@ -1078,6 +1110,8 @@
             // Streak persists if last week was fully done; otherwise reset
             if (!lastWeekFullyDone) chore.streak = 0;
           });
+          // Reset Save-it-all mode at the start of each new week (kid chooses fresh each week)
+          kid.saveAllMode = false;
         });
         state.lastResetWeek = weekKey;
         scheduleSave();
@@ -1136,7 +1170,6 @@
         <div class="top-nav">
           <button class="nav-btn ${view !== 'parent' && view !== 'dev' ? 'active' : ''}" data-view="picker">Kids tablet</button>
           <button class="nav-btn ${view === 'parent' ? 'active' : ''}" data-view="parent">Parent CFO</button>
-          ${devTabUnlocked ? `<button class="nav-btn ${view === 'dev' ? 'active' : ''}" data-view="dev" style="background:#FCEBEB;color:#A32D2D">🛠 Dev</button>` : ''}
           <div class="top-nav-right">
             <button class="icon-btn" id="sound-toggle" aria-label="Toggle sound">
               <i class="ti ti-volume${soundOn ? '' : '-off'}" style="font-size:16px"></i>
@@ -1149,7 +1182,6 @@
       `;
 
       if (view === 'parent') body += renderParent(tIdx);
-      else if (view === 'dev' && devTabUnlocked) body += renderDevTab();
       else if (view === 'kid' && activeKid) body += renderKid(activeKid, tIdx);
       else body += renderPicker();
 
@@ -1493,6 +1525,37 @@
           }).join('')}
         </div>
         ${showGoal ? renderGoalBar(k) : ''}
+        ${renderSaveAllToggle(k)}
+      `;
+    }
+
+    function renderSaveAllToggle(k) {
+      const on = !!k.saveAllMode;
+      const weeks = k.saveAllWeeks || 0;
+      if (on) {
+        return `
+          <div style="margin-top:12px;padding:12px 14px;background:linear-gradient(135deg, #E1F5EE 0%, #B3E5D1 100%);border-radius:var(--radius-md);border:1px solid #1D9E75">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="font-size:28px;line-height:1">\ud83d\udc37</div>
+              <div style="flex:1">
+                <p style="font-size:13px;font-weight:500;margin:0;color:#0F6E56">Save mode is on this week</p>
+                <p style="font-size:11px;color:#0F6E56;opacity:0.85;margin:2px 0 0">All money goes to Save (90%) and Give (10%). Nothing to Spend.</p>
+              </div>
+              <button id="save-all-toggle" style="border:1px solid #0F6E56;background:white;color:#0F6E56;padding:6px 10px;border-radius:var(--radius-md);font-size:12px;font-weight:500">Turn off</button>
+            </div>
+            ${weeks > 0 ? `<p style="font-size:10px;color:#0F6E56;opacity:0.7;margin:8px 0 0;text-align:center">${k.name} has chosen Save mode ${weeks} week${weeks === 1 ? '' : 's'} so far</p>` : ''}
+          </div>
+        `;
+      }
+      return `
+        <div style="margin-top:12px;padding:10px 12px;background:var(--bg-secondary);border-radius:var(--radius-md);border:0.5px solid var(--border);display:flex;align-items:center;gap:10px">
+          <div style="font-size:22px;line-height:1">\ud83d\udc37</div>
+          <div style="flex:1">
+            <p style="font-size:12px;font-weight:500;margin:0">Save it all this week?</p>
+            <p style="font-size:10px;color:var(--text-secondary);margin:0">Send 90% to Save, 10% to Give. Keep nothing to spend.</p>
+          </div>
+          <button id="save-all-toggle" style="border:0.5px solid var(--border);background:var(--bg-primary);padding:5px 10px;border-radius:var(--radius-md);font-size:12px;font-weight:500">Turn on</button>
+        </div>
       `;
     }
 
@@ -1849,6 +1912,26 @@
         ${renderChoreManagement()}
 
         <div class="card">
+          <p style="font-size:14px;font-weight:500;margin:0 0 8px"><i class="ti ti-adjustments" style="font-size:16px;vertical-align:-2px"></i> Adjustments</p>
+          <p style="font-size:11px;color:var(--text-secondary);margin:0 0 10px">Manual jar corrections, full clears, and backup/restore. Destructive actions require typing a confirmation word and re-entering your PIN.</p>
+          <p style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin:8px 0 6px">Per kid</p>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${Object.entries(state.kids).map(([id, k]) => `
+              <div style="display:flex;gap:6px;align-items:center;padding:8px;background:var(--bg-secondary);border-radius:var(--radius-md)">
+                <p style="font-size:13px;font-weight:500;margin:0;flex:1">${k.name}</p>
+                <button class="adjust-jars-btn" data-kid="${id}" style="border:0.5px solid var(--border);background:var(--bg-primary);padding:6px 10px;border-radius:var(--radius-md);font-size:12px"><i class="ti ti-edit" style="font-size:12px;vertical-align:-1px"></i> Adjust jars</button>
+                <button class="clear-jars-btn" data-kid="${id}" style="border:0.5px solid var(--danger-text);background:var(--danger-bg);color:var(--danger-text);padding:6px 10px;border-radius:var(--radius-md);font-size:12px"><i class="ti ti-trash" style="font-size:12px;vertical-align:-1px"></i> Clear jars</button>
+              </div>
+            `).join('')}
+          </div>
+          <p style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 6px">Backup</p>
+          <div style="display:flex;gap:6px">
+            <button id="export-btn" style="flex:1;text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px"><i class="ti ti-download" style="font-size:14px;vertical-align:-1px;margin-right:4px"></i><strong>Export backup</strong></button>
+            <button id="import-btn" style="flex:1;text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px"><i class="ti ti-upload" style="font-size:14px;vertical-align:-1px;margin-right:4px"></i><strong>Import backup</strong></button>
+          </div>
+        </div>
+
+        <div class="card">
           <p style="font-size:14px;font-weight:500;margin:0 0 8px"><i class="ti ti-settings" style="font-size:16px;vertical-align:-2px"></i> Settings</p>
           <div style="display:flex;flex-direction:column;gap:6px">
             <button id="change-pin-btn" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px"><i class="ti ti-lock" style="font-size:14px;vertical-align:-1px;margin-right:6px"></i><strong>Change Parent PIN</strong> — update your 4-digit unlock code</button>
@@ -2015,273 +2098,7 @@
       `;
     }
 
-    // ---------- Dev tab (destructive testing tools) ----------
-    function renderDevTab() {
-      const familyDocSize = JSON.stringify(state).length;
-      const totalChores = Object.values(state.kids).reduce((a, k) => a + (k.chores || []).length, 0);
-      const totalApprovals = (state.pendingApprovals || []).length;
-      const totalCash = Object.values(state.kids).reduce((a, k) => a + (k.spend || 0) + (k.save || 0) + (k.give || 0), 0);
 
-      return `
-        <div class="card" style="border:1px solid var(--danger-text);background:#FFF8F8">
-          <p style="font-size:14px;font-weight:500;margin:0 0 8px;color:var(--danger-text)"><i class="ti ti-tools" style="font-size:16px;vertical-align:-2px"></i> Developer / testing tools</p>
-          <p style="font-size:12px;color:var(--text-secondary);margin:0 0 12px">⚠️ These actions are destructive. Used for testing during development. Each requires you to type the confirmation word to proceed.</p>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
-            <div style="padding:10px;background:var(--bg-primary);border-radius:var(--radius-md);border:0.5px solid var(--border)">
-              <p style="font-size:11px;color:var(--text-secondary);margin:0;text-transform:uppercase;letter-spacing:0.5px">Doc size</p>
-              <p style="font-size:14px;font-weight:500;margin:2px 0 0">${(familyDocSize / 1024).toFixed(1)} KB</p>
-            </div>
-            <div style="padding:10px;background:var(--bg-primary);border-radius:var(--radius-md);border:0.5px solid var(--border)">
-              <p style="font-size:11px;color:var(--text-secondary);margin:0;text-transform:uppercase;letter-spacing:0.5px">Chores</p>
-              <p style="font-size:14px;font-weight:500;margin:2px 0 0">${totalChores}</p>
-            </div>
-            <div style="padding:10px;background:var(--bg-primary);border-radius:var(--radius-md);border:0.5px solid var(--border)">
-              <p style="font-size:11px;color:var(--text-secondary);margin:0;text-transform:uppercase;letter-spacing:0.5px">Pending</p>
-              <p style="font-size:14px;font-weight:500;margin:2px 0 0">${totalApprovals}</p>
-            </div>
-            <div style="padding:10px;background:var(--bg-primary);border-radius:var(--radius-md);border:0.5px solid var(--border)">
-              <p style="font-size:11px;color:var(--text-secondary);margin:0;text-transform:uppercase;letter-spacing:0.5px">Total cash</p>
-              <p style="font-size:14px;font-weight:500;margin:2px 0 0">${fmt(totalCash)}</p>
-            </div>
-          </div>
-
-          <p style="font-size:12px;font-weight:500;margin:0 0 6px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px">Destructive actions</p>
-          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
-            <button class="dev-action-btn" data-action="nuke-history" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px">
-              <strong>🗑️ Reset chore history</strong> — clear all ticks, keep chores, jars and bonus history. Useful for testing the weekly cycle.
-            </button>
-            <button class="dev-action-btn" data-action="nuke-money" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px">
-              <strong>💸 Reset all jars to $0</strong> — clear spend/save/give for both kids, plus all transaction history. Chores untouched.
-            </button>
-            <button class="dev-action-btn" data-action="nuke-bonus" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px">
-              <strong>✨ Clear bonus history</strong> — wipe all awarded bonuses for both kids. Useful for testing values reset.
-            </button>
-            <button class="dev-action-btn" data-action="nuke-pending" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px">
-              <strong>⏳ Clear pending approvals</strong> — drop the queue. No money flow happens.
-            </button>
-            <button class="dev-action-btn" data-action="full-reset" style="text-align:left;padding:10px 12px;border:1px solid var(--danger-text);background:#FFE0E0;border-radius:var(--radius-md);font-size:13px;color:var(--danger-text)">
-              <strong>💥 NUCLEAR: reset everything to defaults</strong> — wipes EVERYTHING including kids, chores, jars, values, mottos, PIN. Starts fresh.
-            </button>
-          </div>
-
-          <p style="font-size:12px;font-weight:500;margin:0 0 6px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px">Test data</p>
-          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
-            <button class="dev-action-btn" data-action="seed-week" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px">
-              <strong>🎲 Seed a week of ticks</strong> — auto-mark each kid as having done ~80% of their chores this week. Approvals auto-applied.
-            </button>
-            <button class="dev-action-btn" data-action="seed-bonuses" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px">
-              <strong>🌟 Seed 5 test bonuses</strong> — random value bonuses to both kids across the last 30 days.
-            </button>
-          </div>
-
-          <p style="font-size:12px;font-weight:500;margin:0 0 6px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px">Backup / restore</p>
-          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
-            <button id="dev-export-btn" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px">
-              <strong>📤 Export full state as JSON</strong> — downloads a backup file you can keep safe.
-            </button>
-            <button id="dev-import-btn" style="text-align:left;padding:10px 12px;border:0.5px solid var(--border);background:var(--bg-primary);border-radius:var(--radius-md);font-size:13px">
-              <strong>📥 Import state from JSON</strong> — restore from a previous backup. Replaces all current data.
-            </button>
-          </div>
-
-          <details style="margin-top:12px">
-            <summary style="font-size:12px;color:var(--text-secondary);cursor:pointer">Show raw state (read-only)</summary>
-            <pre style="font-size:10px;background:var(--bg-secondary);padding:10px;border-radius:var(--radius-md);overflow:auto;max-height:300px;margin-top:8px">${JSON.stringify(state, null, 2).replace(/</g, '&lt;')}</pre>
-          </details>
-        </div>
-      `;
-    }
-
-    function openDevConfirmModal(actionLabel, dangerWord, onConfirm) {
-      $('modal-root').innerHTML = `
-        <div class="modal-backdrop" id="dev-confirm-backdrop">
-          <div class="modal" style="max-width:380px">
-            <h2><i class="ti ti-alert-triangle" style="font-size:18px;vertical-align:-2px;color:var(--danger-text)"></i> Confirm: ${actionLabel}</h2>
-            <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px">This action cannot be undone. To confirm, type <strong style="color:var(--danger-text);font-family:monospace">${dangerWord}</strong> below.</p>
-            <input type="text" id="m-dev-confirm" placeholder="Type ${dangerWord}" style="width:100%;padding:10px;border:0.5px solid var(--border);border-radius:var(--radius-md);font-size:14px;font-family:monospace;text-transform:uppercase">
-            <p id="m-dev-err" style="font-size:12px;color:var(--danger-text);margin:6px 0 0;min-height:18px"></p>
-            <div class="modal-actions">
-              <button class="cancel" id="m-dev-cancel">Cancel</button>
-              <button class="save" id="m-dev-go" style="background:var(--danger-text)">Yes, do it</button>
-            </div>
-          </div>
-        </div>
-      `;
-      $('dev-confirm-backdrop').onclick = (e) => { if (e.target.id === 'dev-confirm-backdrop') closeModal(); };
-      $('m-dev-cancel').onclick = closeModal;
-      $('m-dev-confirm').focus();
-      $('m-dev-go').onclick = () => {
-        const v = ($('m-dev-confirm').value || '').trim().toUpperCase();
-        if (v !== dangerWord.toUpperCase()) {
-          $('m-dev-err').textContent = `You must type "${dangerWord}" exactly.`;
-          return;
-        }
-        closeModal();
-        onConfirm();
-      };
-    }
-
-    function runDevAction(action) {
-      const labels = {
-        'nuke-history': ['Reset chore history', 'RESET'],
-        'nuke-money': ['Reset all jars to $0', 'NUKE'],
-        'nuke-bonus': ['Clear bonus history', 'CLEAR'],
-        'nuke-pending': ['Clear pending approvals', 'CLEAR'],
-        'full-reset': ['NUCLEAR reset', 'NUKE'],
-      };
-      const [label, word] = labels[action];
-      openDevConfirmModal(label, word, () => {
-        if (action === 'nuke-history') {
-          Object.values(state.kids).forEach(k => {
-            (k.chores || []).forEach(c => {
-              c.history = c.schedule.map(s => s ? 'available' : 'na');
-              c.streak = 0;
-            });
-          });
-        } else if (action === 'nuke-money') {
-          Object.values(state.kids).forEach(k => {
-            k.spend = 0; k.save = 0; k.give = 0;
-            k.spendHistory = []; k.saveHistory = []; k.giveHistory = [];
-          });
-        } else if (action === 'nuke-bonus') {
-          Object.values(state.kids).forEach(k => { k.bonusHistory = []; });
-        } else if (action === 'nuke-pending') {
-          state.pendingApprovals = [];
-          Object.values(state.kids).forEach(k => {
-            (k.chores || []).forEach(c => {
-              c.history = c.history.map(h => h === 'pending' ? 'available' : h);
-            });
-          });
-        } else if (action === 'full-reset') {
-          // Wipe everything except photoURLs (storage handles those separately)
-          const photos = {};
-          Object.entries(state.kids).forEach(([id, k]) => { if (k.photoURL) photos[id] = k.photoURL; });
-          state = JSON.parse(JSON.stringify(DEFAULT_STATE));
-          // Re-apply photos so we don't lose them
-          Object.entries(photos).forEach(([id, url]) => {
-            if (state.kids[id]) state.kids[id].photoURL = url;
-          });
-        }
-        scheduleSave();
-        render();
-      });
-    }
-
-    function seedTestData(kind) {
-      const tIdx = todayIdx();
-      const today = new Date().toISOString().slice(0,10);
-      if (kind === 'week') {
-        Object.values(state.kids).forEach(k => {
-          (k.chores || []).forEach(c => {
-            c.history = c.schedule.map((s, i) => {
-              if (!s) return 'na';
-              if (i > tIdx) return 'available';
-              // ~80% done rate
-              if (Math.random() < 0.8) {
-                // For paid chores, add money + mark done
-                if (c.paid) {
-                  k.spend = (k.spend || 0) + c.amount * 0.7;
-                  k.save = (k.save || 0) + c.amount * 0.2;
-                  k.give = (k.give || 0) + c.amount * 0.1;
-                  if (!k.saveHistory) k.saveHistory = [];
-                  k.saveHistory.push({ date: today, amount: c.amount * 0.2, type: 'in', note: c.title });
-                  if (!k.giveHistory) k.giveHistory = [];
-                  k.giveHistory.push({ date: today, amount: c.amount * 0.1, type: 'in', note: c.title });
-                }
-                return 'done';
-              }
-              return 'missed';
-            });
-            // Recompute streak
-            let s = 0;
-            for (let i = tIdx; i >= 0; i--) {
-              if (c.history[i] === 'done') s++;
-              else if (c.history[i] === 'na') continue;
-              else break;
-            }
-            c.streak = s;
-          });
-        });
-      } else if (kind === 'bonuses') {
-        const values = state.familyValues || [];
-        const reasons = [
-          'Helped without being asked',
-          'Stayed calm during a tough moment',
-          'Shared with their brother',
-          'Tried something new and hard',
-          'Told the truth even though it was hard'
-        ];
-        Object.entries(state.kids).forEach(([kidId, k]) => {
-          for (let i = 0; i < 5; i++) {
-            const v = values[Math.floor(Math.random() * values.length)];
-            const r = reasons[Math.floor(Math.random() * reasons.length)];
-            const amt = [1, 2, 2, 3][Math.floor(Math.random() * 4)];
-            const daysAgo = Math.floor(Math.random() * 30);
-            const d = new Date(); d.setDate(d.getDate() - daysAgo);
-            const dateISO = d.toISOString().slice(0, 10);
-            k.spend = (k.spend || 0) + amt * 0.7;
-            k.save = (k.save || 0) + amt * 0.2;
-            k.give = (k.give || 0) + amt * 0.1;
-            if (!k.bonusHistory) k.bonusHistory = [];
-            k.bonusHistory.push({
-              date: dateISO,
-              amount: amt,
-              reason: r,
-              value: v ? v.name : null,
-              emoji: v ? v.emoji : null,
-              unviewed: false
-            });
-          }
-        });
-      }
-      scheduleSave();
-      render();
-    }
-
-    function exportStateAsJSON() {
-      const dataStr = JSON.stringify(state, null, 2);
-      const blob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const ts = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-      a.href = url;
-      a.download = `family-cfo-backup-${ts}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
-
-    function importStateFromJSON() {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'application/json';
-      input.onchange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          try {
-            const imported = JSON.parse(reader.result);
-            if (!imported.kids) {
-              alert('Invalid backup file — missing kids data.');
-              return;
-            }
-            openDevConfirmModal('Import & replace all data', 'IMPORT', () => {
-              state = imported;
-              scheduleSave();
-              render();
-              alert('Data imported. App will refresh.');
-            });
-          } catch (err) {
-            alert('Could not parse JSON: ' + err.message);
-          }
-        };
-        reader.readAsText(file);
-      };
-      input.click();
-    }
 
     // ---------- Family values ----------
     function renderFamilyValues() {
@@ -2391,10 +2208,8 @@
           const v = (state.familyValues || []).find(x => x.name === pickedValue);
           pickedEmoji = v ? v.emoji : null;
         }
-        // 70/20/10 split
-        k.spend = (k.spend || 0) + amt * 0.7;
-        k.save  = (k.save  || 0) + amt * 0.2;
-        k.give  = (k.give  || 0) + amt * 0.1;
+        // Apply via shared helper (respects Save-it-all mode)
+        applyEarning(k, amt, 'Bonus: ' + reason);
         if (!k.bonusHistory) k.bonusHistory = [];
         k.bonusHistory.push({
           date: today,
@@ -2404,10 +2219,6 @@
           emoji: pickedEmoji,
           unviewed: true
         });
-        if (!k.saveHistory) k.saveHistory = [];
-        k.saveHistory.push({ date: today, amount: amt * 0.2, type: 'in', note: 'Bonus: ' + reason });
-        if (!k.giveHistory) k.giveHistory = [];
-        k.giveHistory.push({ date: today, amount: amt * 0.1, type: 'in', note: 'Bonus: ' + reason });
         playBonusFanfare();
         scheduleSave();
         closeModal();
@@ -2543,6 +2354,186 @@
         closeModal();
         alert('PIN updated.');
       };
+    }
+
+    // ---------- Adjustments: typed-confirm + PIN re-entry ----------
+    // Two-factor destructive action: typed word + Parent PIN. Calls onConfirm() if both match.
+    function openConfirmActionModal(actionLabel, dangerWord, onConfirm) {
+      $('modal-root').innerHTML = `
+        <div class="modal-backdrop" id="confirm-action-backdrop">
+          <div class="modal" style="max-width:400px">
+            <h2><i class="ti ti-alert-triangle" style="font-size:18px;vertical-align:-2px;color:var(--danger-text)"></i> ${actionLabel}</h2>
+            <p style="font-size:13px;color:var(--text-secondary);margin:0 0 12px">This action cannot be undone. Two steps to confirm:</p>
+            <div class="form-row">
+              <label>1. Type <strong style="color:var(--danger-text);font-family:monospace">${dangerWord}</strong> below</label>
+              <input type="text" id="m-ca-word" placeholder="${dangerWord}" autocomplete="off" style="width:100%;padding:10px;border:0.5px solid var(--border);border-radius:var(--radius-md);font-size:14px;font-family:monospace;text-transform:uppercase">
+            </div>
+            <div class="form-row">
+              <label>2. Enter your Parent PIN</label>
+              <input type="tel" id="m-ca-pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••" style="width:100%;text-align:center;font-size:22px;letter-spacing:10px;padding:10px;border:0.5px solid var(--border);border-radius:var(--radius-md)">
+            </div>
+            <p id="m-ca-err" style="font-size:12px;color:var(--danger-text);margin:0;min-height:18px"></p>
+            <div class="modal-actions">
+              <button class="cancel" id="m-ca-cancel">Cancel</button>
+              <button class="save" id="m-ca-go" style="background:var(--danger-text)">Yes, do it</button>
+            </div>
+          </div>
+        </div>
+      `;
+      $('confirm-action-backdrop').onclick = (e) => { if (e.target.id === 'confirm-action-backdrop') closeModal(); };
+      $('m-ca-cancel').onclick = closeModal;
+      setTimeout(() => $('m-ca-word').focus(), 50);
+      $('m-ca-go').onclick = () => {
+        const word = ($('m-ca-word').value || '').trim().toUpperCase();
+        const pin = ($('m-ca-pin').value || '').trim();
+        if (word !== dangerWord.toUpperCase()) {
+          $('m-ca-err').textContent = `Type "${dangerWord}" exactly.`;
+          return;
+        }
+        if (pin !== state.parentPin) {
+          $('m-ca-err').textContent = 'PIN incorrect.';
+          return;
+        }
+        closeModal();
+        onConfirm();
+      };
+    }
+
+    // ---------- Adjust a kid's jars manually ----------
+    function openAdjustJarsModal(kidId) {
+      const k = state.kids[kidId];
+      $('modal-root').innerHTML = `
+        <div class="modal-backdrop" id="adjust-jars-backdrop">
+          <div class="modal" style="max-width:420px">
+            <h2>Adjust ${k.name}'s jars</h2>
+            <p style="font-size:12px;color:var(--text-secondary);margin:0 0 14px">Use + or − to correct a jar balance. The change is recorded in history. Useful for cash transfers, corrections, or one-off allowances.</p>
+            <div class="form-row">
+              <label>Jar</label>
+              <div class="flag-toggle" id="m-aj-jar">
+                <button type="button" class="jar-pick selected" data-jar="spend">Spend (${fmt(k.spend || 0)})</button>
+                <button type="button" class="jar-pick" data-jar="save">Save (${fmt(k.save || 0)})</button>
+                <button type="button" class="jar-pick" data-jar="give">Give (${fmt(k.give || 0)})</button>
+              </div>
+            </div>
+            <div class="form-row">
+              <label>Direction</label>
+              <div class="flag-toggle" id="m-aj-dir">
+                <button type="button" class="dir-pick selected" data-dir="in"><i class="ti ti-plus" style="font-size:13px;vertical-align:-1px"></i> Add</button>
+                <button type="button" class="dir-pick" data-dir="out"><i class="ti ti-minus" style="font-size:13px;vertical-align:-1px"></i> Subtract</button>
+              </div>
+            </div>
+            <div class="form-row">
+              <label>Amount</label>
+              <input type="number" id="m-aj-amt" min="0.01" step="0.01" placeholder="0.00" style="width:100%;padding:10px;border:0.5px solid var(--border);border-radius:var(--radius-md);font-size:16px">
+            </div>
+            <div class="form-row">
+              <label>Reason (required)</label>
+              <input type="text" id="m-aj-reason" maxlength="60" placeholder="e.g. Gave $5 cash to spend, correcting" style="width:100%;padding:10px;border:0.5px solid var(--border);border-radius:var(--radius-md);font-size:13px">
+            </div>
+            <p id="m-aj-err" style="font-size:12px;color:var(--danger-text);margin:0;min-height:18px"></p>
+            <div class="modal-actions">
+              <button class="cancel" id="m-aj-cancel">Cancel</button>
+              <button class="save" id="m-aj-save">Apply</button>
+            </div>
+          </div>
+        </div>
+      `;
+      $('adjust-jars-backdrop').onclick = (e) => { if (e.target.id === 'adjust-jars-backdrop') closeModal(); };
+      $('m-aj-cancel').onclick = closeModal;
+
+      let pickedJar = 'spend';
+      document.querySelectorAll('.jar-pick').forEach(b => {
+        b.onclick = () => {
+          document.querySelectorAll('.jar-pick').forEach(x => x.classList.remove('selected'));
+          b.classList.add('selected');
+          pickedJar = b.dataset.jar;
+        };
+      });
+      let pickedDir = 'in';
+      document.querySelectorAll('.dir-pick').forEach(b => {
+        b.onclick = () => {
+          document.querySelectorAll('.dir-pick').forEach(x => x.classList.remove('selected'));
+          b.classList.add('selected');
+          pickedDir = b.dataset.dir;
+        };
+      });
+
+      $('m-aj-save').onclick = () => {
+        const amt = parseFloat($('m-aj-amt').value) || 0;
+        const reason = ($('m-aj-reason').value || '').trim();
+        if (amt <= 0) { $('m-aj-err').textContent = 'Enter an amount above zero.'; return; }
+        if (!reason) { $('m-aj-err').textContent = 'Please add a short reason.'; return; }
+        const current = k[pickedJar] || 0;
+        if (pickedDir === 'out' && amt > current) {
+          $('m-aj-err').textContent = `Can't subtract more than ${fmt(current)}.`;
+          return;
+        }
+        const delta = pickedDir === 'in' ? amt : -amt;
+        k[pickedJar] = Math.max(0, current + delta);
+        const today = new Date().toISOString().slice(0,10);
+        const histField = pickedJar + 'History';
+        if (!k[histField]) k[histField] = [];
+        k[histField].push({ date: today, amount: amt, type: pickedDir, note: 'Adjustment: ' + reason });
+        scheduleSave();
+        closeModal();
+        render();
+      };
+    }
+
+    // ---------- Backup / restore ----------
+    function exportStateAsJSON() {
+      const dataStr = JSON.stringify(state, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const ts = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+      a.href = url;
+      a.download = 'family-cfo-backup-' + ts + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function importStateFromJSON() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/json';
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const imported = JSON.parse(reader.result);
+            if (!imported.kids) {
+              alert('Invalid backup file — missing kids data.');
+              return;
+            }
+            openConfirmActionModal('Replace ALL data with backup', 'IMPORT', () => {
+              state = imported;
+              scheduleSave();
+              render();
+              alert('Data imported. App will refresh.');
+            });
+          } catch (err) {
+            alert('Could not parse JSON: ' + err.message);
+          }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    }
+
+    // ---------- Clear a single kid's jars ----------
+    function clearKidJars(kidId) {
+      const k = state.kids[kidId];
+      openConfirmActionModal('Clear ' + k.name + "'s jars to $0", 'CLEAR', () => {
+        k.spend = 0; k.save = 0; k.give = 0;
+        k.spendHistory = []; k.saveHistory = []; k.giveHistory = [];
+        scheduleSave();
+        render();
+      });
     }
 
     function openValuesEditModal() {
@@ -3125,7 +3116,6 @@
             }
             return;
           }
-          if (targetView === 'dev' && !devTabUnlocked) return; // shouldn't be possible to click but guard anyway
           view = targetView;
           activeKid = null;
           kidWeekView = false;
@@ -3133,26 +3123,20 @@
         };
       });
 
-      // Dev tab handlers
-      document.querySelectorAll('.dev-action-btn').forEach(b => {
-        b.onclick = () => {
-          const action = b.dataset.action;
-          if (action === 'seed-week') {
-            seedTestData('week');
-          } else if (action === 'seed-bonuses') {
-            seedTestData('bonuses');
-          } else {
-            runDevAction(action);
-          }
-        };
-      });
-      const exp = $('dev-export-btn');
-      if (exp) exp.onclick = exportStateAsJSON;
-      const imp = $('dev-import-btn');
-      if (imp) imp.onclick = importStateFromJSON;
-
       const cpBtn = $('change-pin-btn');
       if (cpBtn) cpBtn.onclick = () => openChangePinModal();
+
+      document.querySelectorAll('.adjust-jars-btn').forEach(b => {
+        b.onclick = () => openAdjustJarsModal(b.dataset.kid);
+      });
+      document.querySelectorAll('.clear-jars-btn').forEach(b => {
+        b.onclick = () => clearKidJars(b.dataset.kid);
+      });
+      const expBtn = $('export-btn');
+      if (expBtn) expBtn.onclick = exportStateAsJSON;
+      const impBtn = $('import-btn');
+      if (impBtn) impBtn.onclick = importStateFromJSON;
+
       document.querySelectorAll('.kid-tile').forEach(b => {
         b.onclick = () => {
           ensureAudio();
@@ -3226,6 +3210,20 @@
       const toggleBtn = $('toggle-week-btn');
       if (toggleBtn) toggleBtn.onclick = () => {
         kidWeekView = !kidWeekView;
+        render();
+      };
+
+      // Save-it-all-this-week toggle in kid view
+      const saveAllBtn = $('save-all-toggle');
+      if (saveAllBtn) saveAllBtn.onclick = () => {
+        const k = state.kids[activeKid];
+        if (!k) return;
+        const turningOn = !k.saveAllMode;
+        k.saveAllMode = turningOn;
+        if (turningOn) {
+          k.saveAllWeeks = (k.saveAllWeeks || 0) + 1;
+        }
+        scheduleSave();
         render();
       };
 
@@ -3304,18 +3302,8 @@
             }
             chore.streak = streak;
           }
-          // 70/20/10 split + log to histories
-          const today = new Date().toISOString().slice(0,10);
-          const spendAmt = p.amount * 0.7;
-          const saveAmt  = p.amount * 0.2;
-          const giveAmt  = p.amount * 0.1;
-          kid.spend = (kid.spend || 0) + spendAmt;
-          kid.save  = (kid.save  || 0) + saveAmt;
-          kid.give  = (kid.give  || 0) + giveAmt;
-          if (!kid.saveHistory) kid.saveHistory = [];
-          kid.saveHistory.push({ date: today, amount: saveAmt, type: 'in', note: p.chore });
-          if (!kid.giveHistory) kid.giveHistory = [];
-          kid.giveHistory.push({ date: today, amount: giveAmt, type: 'in', note: p.chore });
+          // Apply earning via shared helper (respects Save-it-all mode)
+          applyEarning(kid, p.amount, p.chore);
           state.pendingApprovals.splice(idx, 1);
           playApprovalChime();
           scheduleSave();
@@ -3578,7 +3566,6 @@
       $('loading').style.display = 'none';
       // Always reset session locks when auth changes
       parentUnlocked = false;
-      devTabUnlocked = false;
       if (user) {
         $('login-screen').style.display = 'none';
         $('app').style.display = 'block';
@@ -3623,30 +3610,6 @@
         navigator.serviceWorker.register('./service-worker.js').catch(console.warn);
       });
     }
-
-    // Easter egg: tap version footer 7 times within 4 seconds to reveal Dev tab
-    (function setupDevUnlock() {
-      const f = $('version-footer');
-      if (!f) return;
-      let taps = 0;
-      let timer = null;
-      f.addEventListener('click', () => {
-        taps++;
-        clearTimeout(timer);
-        timer = setTimeout(() => { taps = 0; }, 4000);
-        if (taps >= 7) {
-          taps = 0;
-          // Require PIN unlock first
-          if (!parentUnlocked) {
-            alert('Unlock Parent CFO first, then tap 7 times again to reveal Dev tab.');
-            return;
-          }
-          devTabUnlocked = true;
-          alert('Dev tab unlocked for this session.');
-          render();
-        }
-      });
-    })();
   </script>
 </body>
 </html>
